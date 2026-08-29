@@ -66,15 +66,6 @@ body {
   -webkit-font-smoothing: antialiased;
   transition: background var(--transition), color var(--transition);
 }
-
-/* ---------- 2b. 依门 · 背景图样 ---------- */
-body {
-  background-image: url("../img/bg-yimen.svg");
-  background-size: 640px 640px;
-  background-attachment: fixed;
-  background-position: center top;
-  background-repeat: repeat;
-}
 a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border-strong); transition: border-color var(--transition), color var(--transition); }
 a:hover { border-color: var(--text); }
 code {
@@ -434,7 +425,7 @@ td code { white-space: nowrap; }
 /* ---------- 17. 打印 ---------- */
 @media print {
   .topbar, .sidebar, .prevnext, .scrim, .btn, .mark-done, .codeblock-head .actions, .demo-ctrl { display: none !important; }
-  body { background: #fff; background-image: none !important; color: #000; font-size: 12pt; }
+  body { background: #fff; color: #000; font-size: 12pt; }
   .content-inner { max-width: 100%; padding: 0; }
   .hero .watermark { color: #eee; }
   .codeblock { background: #fff; border: 1px solid #999; color: #000; }
