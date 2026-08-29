@@ -15,7 +15,7 @@
 <div class="layout">
 <aside class="sidebar"><nav id="sidebarNav"></nav></aside>
 <main class="content"><div class="content-inner">
-<div class="hero"><div class="chapter-tag">CODE LAB · READY TO RUN</div><h1>代码库</h1><p class="goal">全部封装好的零依赖 Python 模块，复制或下载即可运行。每个模块对应一个章节的原理，注释里写清了「为什么这样写」。</p></div><div class="tool-filter"><select id="toolFilterChapter" aria-label="按章节筛选"><option value="all">全部章节</option><option value="ch01">第 01 章</option><option value="ch03">第 03 章</option><option value="ch04">第 04 章</option><option value="ch05">第 05 章</option><option value="ch06">第 06 章</option><option value="ch07">第 07 章</option><option value="ch08">第 08 章</option></select><input id="toolFilterText" type="text" placeholder="输入关键词筛选…" aria-label="按关键词筛选"></div><div class="tool-card" data-ch="ch01"><div class="tc-head"><code>mini_agent.py</code><a class="tc-ch" href="docs/ch01.html">第 01 章 · 认识 Claude Code →</a></div><p class="tc-desc">认识「代理」的最小雏形：一个读目标 → 决定 → 动手 → 看结果的循环骨架。</p><div class="runsteps">运行：<kbd>python mini_agent.py</kbd></div><figure class="codeblock" data-file="mini_agent.py" data-lang="python"><pre class="codebody"><code>"""
+<div class="hero"><div class="chapter-tag">CODE LAB · READY TO RUN</div><h1>代码库</h1><p class="goal">全部封装好的零依赖 Python 模块，复制或下载即可运行。每个模块对应一个章节的原理，注释里写清了「为什么这样写」。</p></div><div class="tool-filter"><select id="toolFilterChapter" aria-label="按章节筛选"><option value="all">全部章节</option><option value="ch01">第 01 章</option><option value="ch03">第 03 章</option><option value="ch04">第 04 章</option><option value="ch05">第 05 章</option><option value="ch06">第 06 章</option><option value="ch07">第 07 章</option><option value="ch08">第 08 章</option><option value="ch10">第 10 章</option></select><input id="toolFilterText" type="text" placeholder="输入关键词筛选…" aria-label="按关键词筛选"></div><div class="tool-card" data-ch="ch01"><div class="tc-head"><code>mini_agent.py</code><a class="tc-ch" href="docs/ch01.html">第 01 章 · 认识 Claude Code →</a></div><p class="tc-desc">认识「代理」的最小雏形：一个读目标 → 决定 → 动手 → 看结果的循环骨架。</p><div class="runsteps">运行：<kbd>python mini_agent.py</kbd></div><figure class="codeblock" data-file="mini_agent.py" data-lang="python"><pre class="codebody"><code>"""
 mini_agent.py —— 认识「代理」的最小雏形（配合第 1 章）
 
 代理 = 一个循环：读目标 -&gt; 决定 -&gt; 动手 -&gt; 看结果 -&gt; 再决定。
@@ -436,11 +436,208 @@ def main() -&gt; None:
 
 
 if __name__ == "__main__":
-    main()</code></pre></figure></div>
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch10"><div class="tc-head"><code>codex_bridge.py</code><a class="tc-ch" href="docs/ch10.html">第 10 章 · 自学路线图与实践建议 →</a></div><p class="tc-desc">本机 Codex 直连桥接服务：让网站的「问 Codex」窗口真正调用本机 Codex CLI（只读沙箱，仅本机流转）。</p><div class="runsteps">运行：<kbd>python tools\codex_bridge.py</kbd><kbd>powershell -ExecutionPolicy Bypass -File tools\start_bridge.ps1</kbd></div><figure class="codeblock" data-file="codex_bridge.py" data-lang="python"><pre class="codebody"><code># -*- coding: utf-8 -*-
+"""
+codex_bridge.py —— 本机「Codex 直连」桥接服务
+================================================
+让静态网站里的「问 Codex」窗口真正调用本机 Codex CLI。
+
+用法：
+    python tools/codex_bridge.py            # 默认监听 127.0.0.1:8001
+    python tools/codex_bridge.py 8002       # 自定义端口
+
+接口：
+    GET  /api/health   -&gt; {"ok": true, "service": "codex-bridge", ...}
+    POST /api/ask      -&gt; {"ok": true, "reply": "...", "usage": {...}}
+    GET  /             -&gt; 服务信息
+
+安全设计：
+    * 只绑定 127.0.0.1（本机回环），不对外网开放。
+    * 每次提问都以「只读沙箱（read-only）」运行 Codex，不会修改任何文件。
+    * CORS 只放行本站来源（127.0.0.1:8000 / localhost:8000 / file://）。
+    * 同一时间只处理一个问题，防止把本机资源打满。
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
+
+HOST = "127.0.0.1"
+PORT = int(sys.argv[1]) if len(sys.argv) &gt; 1 else 8001
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # 仓库根目录
+
+ALLOWED_ORIGINS = {
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8001",
+    "http://localhost:8001",
+    "null",  # file:// 直接打开网页时的 Origin
+}
+
+_lock = threading.Lock()
+
+
+def codex_env():
+    """补全 HOME / CODEX_HOME，让 codex CLI 能找到桌面版的登录态与配置。"""
+    env = os.environ.copy()
+    home = env.get("USERPROFILE") or env.get("HOME") or ""
+    env.setdefault("HOME", home)
+    env.setdefault("CODEX_HOME", os.path.join(home, ".codex"))
+    return env
+
+
+def find_codex():
+    return shutil.which("codex") or "codex"
+
+
+def ask_codex(question, page):
+    """调用 `codex exec` 执行一次只读问答，返回 (reply, usage, error)。"""
+    sys_prompt = (
+        "你是「Claude Code 原理图解」学习站的答疑助手，由本机 Codex 驱动。\n"
+        "回答要求：\n"
+        "1. 用通俗易懂的中文，紧扣 Claude Code 的原理与本站内容"
+        "（代理循环、工具系统、权限与安全、上下文管理、CLI、配置与特性门控、公开源码分析、Rust 移植等）。\n"
+        "2. 先给结论，再简要解释，能举例子更好；控制在 300 字以内。\n"
+        "3. 如果问题与本站主题无关，礼貌说明，并建议一个相关的问题。\n"
+        "4. 不要修改任何文件，只回答问题。\n"
+        f"用户当前浏览的页面：{page}\n"
+        "用户的问题：\n" + question
+    )
+    cmd = [find_codex(), "exec", "--json", "-s", "read-only", sys_prompt]
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=ROOT,
+            env=codex_env(),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        return "", {}, "Codex 回答超时（超过 5 分钟）。请重试，或换一个更短的问题。"
+    except Exception as exc:  # noqa: BLE001
+        return "", {}, "调用 Codex 失败：%s" % exc
+
+    reply = ""
+    usage = {}
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            evt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if evt.get("type") == "item.completed":
+            item = evt.get("item", {})
+            if item.get("type") == "agent_message" and item.get("text"):
+                reply = item["text"]
+        elif evt.get("type") == "turn.completed":
+            usage = evt.get("usage", {})
+
+    if not reply:
+        tail = (proc.stderr or "").strip()[-600:]
+        return "", usage, "Codex 没有返回内容（退出码 %s）。\n%s" % (proc.returncode, tail)
+
+    return reply, usage, ""
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "CodexBridge/1.0"
+
+    def _cors(self):
+        origin = self.headers.get("Origin", "")
+        if origin in ALLOWED_ORIGINS or not origin:
+            self.send_header("Access-Control-Allow-Origin", origin or "*")
+        else:
+            self.send_header("Access-Control-Allow-Origin", "null")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Cache-Control", "no-store")
+
+    def _json(self, code, obj):
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._cors()
+        self.end_headers()
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if path == "/api/health":
+            self._json(200, {"ok": True, "service": "codex-bridge", "mode": "codex-cli"})
+        elif path == "/":
+            self._json(200, {
+                "ok": True,
+                "service": "codex-bridge",
+                "hint": "POST /api/ask 传入 {\"question\": \"...\", \"page\": \"...\"}",
+            })
+        else:
+            self._json(404, {"ok": False, "error": "not found"})
+
+    def do_POST(self):
+        path = urlparse(self.path).path
+        if path != "/api/ask":
+            self._json(404, {"ok": False, "error": "not found"})
+            return
+        if not _lock.acquire(blocking=False):
+            self._json(429, {"ok": False, "error": "上一个问题还在回答中，请稍等。"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                data = json.loads(raw.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self._json(400, {"ok": False, "error": "请求体不是合法 JSON"})
+                return
+            question = (data.get("question") or "").strip()
+            page = (data.get("page") or "").strip()
+            if not question:
+                self._json(400, {"ok": False, "error": "缺少 question 字段"})
+                return
+            reply, usage, err = ask_codex(question, page)
+            if err:
+                self._json(500, {"ok": False, "error": err})
+            else:
+                self._json(200, {"ok": True, "reply": reply, "usage": usage})
+        finally:
+            _lock.release()
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write("[codex-bridge] %s\n" % (fmt % args))
+
+
+if __name__ == "__main__":
+    print("Codex Bridge 已启动：http://%s:%d" % (HOST, PORT))
+    print("配合网站「问 Codex」窗口使用；按 Ctrl+C 停止。")
+    httpd = ThreadingHTTPServer((HOST, PORT), Handler)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\n已停止。")</code></pre></figure></div>
 </div></main>
 </div>
 <footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/main.js"></script>
+<button id="codexFab" class="codex-fab" type="button" aria-label="问 Codex"><span class="fab-ico">&gt;_</span><span class="fab-txt">问 Codex</span></button>
+<aside id="codexChat" class="codex-chat" role="dialog" aria-label="问 Codex 直连窗口"><div class="codex-head"><b>&gt;_ Codex</b><span id="codexStatus" class="codex-status connecting">连接中…</span><button id="codexClose" type="button" aria-label="关闭">×</button></div><div id="codexMessages" class="codex-msgs"></div><div id="codexChips" class="codex-chips"><button type="button">代理循环是怎么转起来的？</button><button type="button">tool_use 是什么？</button><button type="button">YOLO 权限怎么分级？</button><button type="button">上下文被占满会怎样？</button></div><div class="codex-input"><textarea id="codexInput" rows="1" placeholder="向本机 Codex 提问…（只读沙箱）"></textarea><button id="codexSend" type="button">发送</button></div></aside>
+<script src="assets/js/codex-chat.js"></script>
 </body>
 </html>

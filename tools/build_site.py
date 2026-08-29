@@ -34,9 +34,9 @@ def detect_lang(fname):
     if n.endswith(".rs"): return "rust"
     return "text"
 
-def code_figure(fname=None, lang=None, text=None):
+def code_figure(fname=None, lang=None, text=None, path=None):
     if fname:
-        text = (CODE_DIR / fname).read_text(encoding="utf-8")
+        text = (path if path is not None else CODE_DIR / fname).read_text(encoding="utf-8")
     if lang is None:
         lang = detect_lang(fname)
     df = f' data-file="{fname}"' if fname else ""
@@ -274,6 +274,32 @@ def footer(prefix):
         "</div></footer>"
     )
 
+# ---------- 问 Codex 直连窗口 ----------
+def codex_widget(prefix):
+    """右下角「问 Codex」直连窗口：本机桥接 -> Codex CLI（只读沙箱）。"""
+    chips = [
+        "代理循环是怎么转起来的？",
+        "tool_use 是什么？",
+        "YOLO 权限怎么分级？",
+        "上下文被占满会怎样？",
+    ]
+    chip_html = "".join(f'<button type="button">{esc(c)}</button>' for c in chips)
+    return (
+        '<button id="codexFab" class="codex-fab" type="button" aria-label="问 Codex">'
+        '<span class="fab-ico">&gt;_</span><span class="fab-txt">问 Codex</span></button>\n'
+        '<aside id="codexChat" class="codex-chat" role="dialog" aria-label="问 Codex 直连窗口">'
+        '<div class="codex-head"><b>&gt;_ Codex</b>'
+        '<span id="codexStatus" class="codex-status connecting">连接中…</span>'
+        '<button id="codexClose" type="button" aria-label="关闭">×</button></div>'
+        '<div id="codexMessages" class="codex-msgs"></div>'
+        f'<div id="codexChips" class="codex-chips">{chip_html}</div>'
+        '<div class="codex-input">'
+        '<textarea id="codexInput" rows="1" placeholder="向本机 Codex 提问…（只读沙箱）"></textarea>'
+        '<button id="codexSend" type="button">发送</button></div>'
+        "</aside>\n"
+        f'<script src="{prefix}assets/js/codex-chat.js"></script>\n'
+    )
+
 def page_shell(title, desc, body, page_id, prefix, active, with_sidebar=True):
     sidebar = '<aside class="sidebar"><nav id="sidebarNav"></nav></aside>' if with_sidebar else ""
     layout_cls = ' class="content-inner"' if not with_sidebar else ' class="content-inner"'
@@ -297,6 +323,7 @@ def page_shell(title, desc, body, page_id, prefix, active, with_sidebar=True):
         f"{footer(prefix)}\n"
         f'<script src="{prefix}assets/js/nav.js"></script>\n'
         f'<script src="{prefix}assets/js/main.js"></script>\n'
+        f"{codex_widget(prefix)}"
         "</body>\n</html>\n"
     )
 
@@ -422,6 +449,10 @@ def build_toolbox():
         {"file": "config.py", "ch": "ch08", "ch_num": "08", "ch_title": "配置、环境变量与特性门控",
          "desc": "环境变量解析 + 特性开关：用环境变量覆盖默认值，控制功能开不开。",
          "run": ["python config.py", "CLAUDECODE_COORDINATOR_MODE=1 python config.py"]},
+        {"file": "codex_bridge.py", "ch": "ch10", "ch_num": "10", "ch_title": "自学路线图与实践建议",
+         "desc": "本机 Codex 直连桥接服务：让网站的「问 Codex」窗口真正调用本机 Codex CLI（只读沙箱，仅本机流转）。",
+         "run": ["python tools\\codex_bridge.py", "powershell -ExecutionPolicy Bypass -File tools\\start_bridge.ps1"],
+         "path": ROOT / "tools" / "codex_bridge.py"},
     ]
     cards = []
     for m in modules:
@@ -433,7 +464,7 @@ def build_toolbox():
             f'<a class="tc-ch" href="docs/{m["ch"]}.html">第 {m["ch_num"]} 章 · {esc(m["ch_title"])} →</a>'
             f'</div><p class="tc-desc">{esc(m["desc"])}</p>'
             f'<div class="runsteps">运行：{run}</div>'
-            f'{code_figure(m["file"], "python")}</div>')
+            f'{code_figure(m["file"], "python", path=m.get("path"))}</div>')
     body = (
         '<div class="hero"><div class="chapter-tag">CODE LAB · READY TO RUN</div>'
         "<h1>代码库</h1>"
@@ -445,7 +476,7 @@ def build_toolbox():
         '<option value="ch01">第 01 章</option><option value="ch03">第 03 章</option>'
         '<option value="ch04">第 04 章</option><option value="ch05">第 05 章</option>'
         '<option value="ch06">第 06 章</option><option value="ch07">第 07 章</option>'
-        '<option value="ch08">第 08 章</option>'
+        '<option value="ch08">第 08 章</option><option value="ch10">第 10 章</option>'
         "</select>"
         '<input id="toolFilterText" type="text" placeholder="输入关键词筛选…" aria-label="按关键词筛选">'
         "</div>"
@@ -476,6 +507,7 @@ def build_about():
         "<li>纯静态站点：零依赖、无构建、无 CDN，断网可读，可双击打开或部署到 GitHub Pages。</li>"
         "<li>学习进度、深浅主题、字号、阅读位置只保存在本机浏览器 localStorage，不上传。</li>"
         "<li>代码库模块为 Python 3 零依赖实现，复制或下载即可运行。</li>"
+        "<li>「问 Codex」窗口通过本机桥接服务调用本机 Codex CLI（只读沙箱），问题与回答仅在本机流转。</li>"
         "</ul>"
         '<h2 id="s4"><span class="h2-num">/</span>致谢</h2>'
         "<p>感谢 ccleaks 的资料整理与 claw-code 的开源移植，为中文自学者提供了难得的学习素材。</p>"

@@ -96,5 +96,8 @@ if __name__ == "__main__":
 <footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
 <script src="../assets/js/nav.js"></script>
 <script src="../assets/js/main.js"></script>
+<button id="codexFab" class="codex-fab" type="button" aria-label="问 Codex"><span class="fab-ico">&gt;_</span><span class="fab-txt">问 Codex</span></button>
+<aside id="codexChat" class="codex-chat" role="dialog" aria-label="问 Codex 直连窗口"><div class="codex-head"><b>&gt;_ Codex</b><span id="codexStatus" class="codex-status connecting">连接中…</span><button id="codexClose" type="button" aria-label="关闭">×</button></div><div id="codexMessages" class="codex-msgs"></div><div id="codexChips" class="codex-chips"><button type="button">代理循环是怎么转起来的？</button><button type="button">tool_use 是什么？</button><button type="button">YOLO 权限怎么分级？</button><button type="button">上下文被占满会怎样？</button></div><div class="codex-input"><textarea id="codexInput" rows="1" placeholder="向本机 Codex 提问…（只读沙箱）"></textarea><button id="codexSend" type="button">发送</button></div></aside>
+<script src="../assets/js/codex-chat.js"></script>
 </body>
 </html>
