@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 07 章 · CLI 与斜杠命令 — Claude Code 原理图解</title>
+<meta name="description" content="启动参数、REPL 交互、常用斜杠命令，以及 26 个隐藏命令里的代表。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch07">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">07</span><div class="chapter-tag">PART 3 · 外围系统篇 · 支撑它的系统</div><h1>07 · CLI 与斜杠命令</h1><p class="goal">掌握 Claude Code 的「人机界面」：启动方式、交互模式、斜杠命令与隐藏命令。</p></div><div class="meta-card"><span><b>本章目标</b>　掌握 Claude Code 的「人机界面」：启动方式、交互模式、斜杠命令与隐藏命令。</span><span><b>前置依赖</b>　建议先读第 2 章。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-repl"><span class="h2-num">07 /</span>REPL：你看到的最小界面</h2>
+<p>你在终端里和 Claude Code 交互的那个输入框，本质上是一个 <strong>REPL</strong>：Read（读输入）→ Eval（处理）→ Print（输出）→ Loop（循环）。它并不神秘——就是一个 <code>while</code> 循环里反复「读一行输入 → 处理 → 打印结果」。</p>
+<figure class="codeblock" data-file="cli_repl.py" data-lang="python"><pre class="codebody"><code>"""
+cli_repl.py —— 极简交互式 REPL（配合第 7 章）
+
+Claude Code 的交互模式本质是一个 REPL：
+    打印提示符 -&gt; 读一行输入 -&gt; 解析（斜杠命令? 普通对话?）-&gt; 响应 -&gt; 循环
+
+用法:
+    python cli_repl.py
+    在提示符后输入：hello、/help、/status、/quit
+"""
+from __future__ import annotations
+
+def handle_slash(cmd: str) -&gt; str:
+    """斜杠命令分发：/开头的指令走这里。"""
+    if cmd == "/help":
+        return "可用命令: /help /status /quit；直接输入文字开始对话"
+    if cmd == "/status":
+        return "会话: demo | 模式: default | 已用上下文: 12%"
+    if cmd == "/quit":
+        return "__QUIT__"
+    return f"(未知命令 {cmd}，试试 /help)"
+
+
+def main() -&gt; None:
+    print("Claude Code 迷你版（输入 /quit 退出）")
+    while True:
+        try:
+            line = input("&gt; ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n再见")
+            break
+        if not line:
+            continue
+        if line.startswith("/"):
+            reply = handle_slash(line)
+            if reply == "__QUIT__":
+                print("再见")
+                break
+        else:
+            reply = f"[模拟模型] 你说的是：{line}"
+        print(reply)
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure>
+<p>运行 <code>python cli_repl.py</code>，输入 <code>hello</code>、<code>/help</code>、<code>/status</code>、<code>/quit</code> 感受一下。你会发现：<strong>斜杠命令和普通对话走的是两条分支</strong>。</p>
+<h2 id="sec-launch"><span class="h2-num">07 /</span>启动方式与常用参数</h2>
+<p>第一次使用会引导你登录（Anthropic 账号或 API Key），并把选择写入配置。常用的启动方式：</p>
+<div class="envtabs"><div class="tabbar"><button data-pane="pwsh" class="active">PowerShell</button><button data-pane="mac" class="">macOS</button><button data-pane="linux" class="">Linux</button></div><div class="env-pane active" data-pane="pwsh"><figure class="codeblock" data-lang="bash"><pre class="codebody"><code># 交互模式
+claude
+# 直接给任务
+claude "帮我重构这个模块"
+# 继续上次会话
+claude --resume</code></pre></figure></div><div class="env-pane" data-pane="mac"><figure class="codeblock" data-lang="bash"><pre class="codebody"><code># 交互模式
+claude
+# 直接给任务
+claude "帮我重构这个模块"
+# 继续上次会话
+claude --resume</code></pre></figure></div><div class="env-pane" data-pane="linux"><figure class="codeblock" data-lang="bash"><pre class="codebody"><code># 交互模式
+claude
+# 直接给任务
+claude "帮我重构这个模块"
+# 继续上次会话
+claude --resume</code></pre></figure></div></div>
+<h2 id="sec-slash"><span class="h2-num">07 /</span>斜杠命令：内置指令</h2>
+<p>在 REPL 里输入以 <code>/</code> 开头的命令，就会触发内置指令。常见的公开命令有这些：</p>
+<table><thead><tr><th>命令</th><th>作用</th><th>说明</th></tr></thead><tbody><tr><td>/help</td><td>查看帮助</td><td>列出全部命令</td></tr><tr><td>/init</td><td>初始化项目</td><td>生成 CLAUDE.md</td></tr><tr><td>/compact</td><td>压缩上下文</td><td>手动触发压缩（第 6 章）</td></tr><tr><td>/status</td><td>查看会话状态</td><td>会话信息、上下文占用</td></tr><tr><td>/context</td><td>查看上下文</td><td>当前上下文里有什么</td></tr><tr><td>/model</td><td>切换模型</td><td>选择 opus / sonnet 等</td></tr><tr><td>/config</td><td>打开配置</td><td>编辑 settings.json</td></tr><tr><td>/doctor</td><td>自检</td><td>检查安装和环境</td></tr></tbody></table>
+<div class="callout tip"><span class="co-label">冷知识</span>公开源码分析里发现了 <strong>26 个隐藏斜杠命令</strong>——它们没有出现在帮助文档里，属于内部 / 实验功能，比如 <code>/statusline</code>（自定义状态栏）、<code>/buddy</code>（宠物彩蛋）等。命令本身未必都能用，但能看出团队在实验什么。</div>
+<div class="quiz"><div class="quiz-item" data-answer="A"><p class="quiz-q">1. REPL 中的「L」代表什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. Loop——循环，读完处理完再读</button><button type="button" data-opt="B">B. Language</button><button type="button" data-opt="C">C. Line</button></div><div class="quiz-feedback"><span class="mark"></span> Read-Eval-Print-Loop：读、处理、输出、循环，是交互式命令行的基本形态。 <a href="#sec-repl">回看：REPL</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">2. 隐藏斜杠命令和普通命令的区别是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 隐藏命令没写在公开帮助里，多为内部 / 实验功能</button><button type="button" data-opt="B">B. 隐藏命令一定不能用</button><button type="button" data-opt="C">C. 隐藏命令运行更快</button></div><div class="quiz-feedback"><span class="mark"></span> 26 个隐藏命令不显示在帮助文档中，属于内部实验功能。 <a href="#sec-slash">回看：斜杠命令</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 斜杠命令和普通对话在 REPL 里是什么关系？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 走两条不同的分支：/ 开头触发内置指令，其余走对话</button><button type="button" data-opt="B">B. 完全一样，没区别</button><button type="button" data-opt="C">C. 斜杠命令不经过 REPL</button></div><div class="quiz-feedback"><span class="mark"></span> REPL 读入一行后先判断是否以 / 开头，分别进入指令分支或对话分支。 <a href="#sec-slash">回看：斜杠命令</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>交互界面 = REPL：读输入 → 处理 → 输出 → 循环。</li><li>斜杠命令和普通对话走不同分支，/ 开头触发内置指令。</li><li>公开分析发现 26 个隐藏命令，多为实验功能。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

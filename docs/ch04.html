@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 04 章 · 工具系统 — Claude Code 原理图解</title>
+<meta name="description" content="工具注册表、tool_use / tool_result 协议、内置工具清单，以及权限怎么拦在中间。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch04">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">04</span><div class="chapter-tag">PART 2 · 核心机制篇 · 它怎么工作</div><h1>04 · 工具系统</h1><p class="goal">理解「工具 = 函数 + 说明」：模型怎么知道能用什么工具、怎么调用、结果怎么回来。</p></div><div class="meta-card"><span><b>本章目标</b>　理解「工具 = 函数 + 说明」：模型怎么知道能用什么工具、怎么调用、结果怎么回来。</span><span><b>前置依赖</b>　建议先读第 3 章。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-basic"><span class="h2-num">04 /</span>工具 = 函数 + 说明</h2>
+<p>对 Claude Code 来说，一个工具就是三样东西：<strong>名字</strong>（怎么称呼它）、<strong>说明</strong>（什么时候用它、怎么用）、<strong>函数</strong>（真正干活的代码）。模型看到的不是代码，而是「说明书」——一段 JSON：</p>
+<figure class="codeblock" data-lang="json"><pre class="codebody"><code>{
+  "name": "read_file",
+  "description": "读取指定文件的全部内容",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "path": {"type": "string", "description": "要读取的文件路径"}
+    },
+    "required": ["path"]
+  }
+}</code></pre></figure>
+<p>模型读到这份「说明书」，就知道：有个工具叫 <code>read_file</code>，用来读文件，需要传一个 <code>path</code> 参数。<strong>它不直接调用函数，它只是「请求」调用。</strong></p>
+<h2 id="sec-registry"><span class="h2-num">04 /</span>工具注册表：只能调用登记过的</h2>
+<p>程序内部维护一张「工具名 → 函数」的表（叫<strong>注册表</strong>）。模型发来 <code>tool_use</code> 请求后，程序查表、校验参数、执行、返回结果。查不到就报错，绝不静默。这就是为什么模型永远无法调用你没给它的工具。</p>
+<h2 id="sec-protocol"><span class="h2-num">04 /</span>调用协议：tool_use 和 tool_result</h2>
+<p>模型和程序之间的「工具对话」只有两种消息，像一个接力棒：</p>
+<ol class="steps"><li><b>模型发出 tool_use</b>模型说：「我要调用 read_file，参数是 path=notes.txt」。</li><li><b>程序执行工具</b>程序在本地真实执行，拿到结果。</li><li><b>程序回填 tool_result</b>把结果作为一条新消息放回上下文。</li><li><b>模型继续</b>模型看到结果，决定下一步：继续调用工具，还是结束。</li></ol>
+<figure class="codeblock" data-lang="json"><pre class="codebody"><code>// 模型 → 程序：请求调用工具
+{"type": "tool_use", "id": "toolu_01", "name": "read_file", "input": {"path": "notes.txt"}}
+
+// 程序 → 模型：回填执行结果
+{"type": "tool_result", "tool_use_id": "toolu_01", "content": "今天要买牛奶、写周报"}</code></pre></figure>
+<h2 id="sec-builtin"><span class="h2-num">04 /</span>内置工具长什么样</h2>
+<table><thead><tr><th>工具</th><th>作用</th><th>风险等级</th></tr></thead><tbody><tr><td>Bash</td><td>执行 shell 命令（跑测试、装依赖、操作文件）</td><td>高</td></tr><tr><td>Read</td><td>读取文件内容</td><td>低</td></tr><tr><td>Write</td><td>写入 / 覆盖文件</td><td>中</td></tr><tr><td>Edit</td><td>精准修改文件中的一段</td><td>中</td></tr><tr><td>Grep / Glob</td><td>搜索文本 / 按模式找文件</td><td>低</td></tr><tr><td>WebFetch</td><td>抓取网页内容</td><td>低</td></tr></tbody></table>
+<h2 id="sec-gate"><span class="h2-num">04 /</span>权限拦在哪一步</h2>
+<p>注意流程里的<strong>闸门</strong>：模型发出 <code>tool_use</code> 请求后，程序<strong>不会立刻执行</strong>，而是先过一道<strong>权限检查</strong>（第 5 章详细讲）。只有被允许的工具调用才会真正执行——这是安全设计的核心。</p>
+<figure class="codeblock" data-file="tools.py" data-lang="python"><pre class="codebody"><code>"""
+tools.py —— 工具系统的迷你实现（配合第 4 章）
+
+核心思想：工具 = 一个名字 + 一段说明 + 一个函数。
+代理拿到模型的 tool_use 请求后，查表 -&gt; 校验参数 -&gt; 执行 -&gt; 返回结果。
+
+用法:
+    python tools.py
+"""
+from __future__ import annotations
+
+
+class Tool:
+    """一个工具：名字、用途说明、参数说明、真正的函数。"""
+
+    def __init__(self, name: str, description: str, func, params: dict):
+        self.name = name
+        self.description = description      # 给模型看的说明
+        self.func = func                    # 真正执行的函数
+        self.params = params                # 参数说明（真实场景是 JSON Schema）
+
+    def run(self, **kwargs):
+        # 参数校验：只允许声明过的参数，防止乱传
+        unknown = set(kwargs) - set(self.params)
+        if unknown:
+            raise ValueError(f"未知参数: {unknown}")
+        return self.func(**kwargs)
+
+
+def _read(path: str) -&gt; str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "(文件不存在)"
+
+def _bash(command: str) -&gt; str:
+    return f"(模拟执行: {command})"
+
+
+def build_tool_registry() -&gt; dict[str, Tool]:
+    """返回工具注册表：模型只能调用这里登记的工具。"""
+    return {
+        "read_file": Tool(
+            "read_file", "读取指定文件的全部内容", _read,
+            {"path": "要读取的文件路径"},
+        ),
+        "bash": Tool(
+            "bash", "执行一条 shell 命令并返回输出", _bash,
+            {"command": "要执行的命令"},
+        ),
+    }
+
+
+def dispatch(registry: dict[str, Tool], name: str, args: dict) -&gt; str:
+    """调度器：名字 -&gt; 查表 -&gt; 执行。找不到就报错，绝不静默。"""
+    if name not in registry:
+        return f"(错误: 没有叫 {name} 的工具)"
+    return registry[name].run(**args)
+
+
+def main() -&gt; None:
+    registry = build_tool_registry()
+    # 模拟一次工具调用协议：模型返回 tool_use，代理调度，结果回填
+    calls = [
+        ("read_file", {"path": "demo.txt"}),
+        ("bash", {"command": "echo hello"}),
+        ("不存在的工具", {}),
+    ]
+    for name, args in calls:
+        print(f"tool_use: {name}{args}")
+        print("   -&gt;", dispatch(registry, name, args))
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure>
+<div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. 模型直接调用工具函数吗？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 直接调用</button><button type="button" data-opt="B">B. 只发请求，由程序查表执行</button><button type="button" data-opt="C">C. 模型自己写代码执行</button></div><div class="quiz-feedback"><span class="mark"></span> 模型只发 tool_use 请求；程序负责查注册表、校验、执行、回填结果。 <a href="#sec-protocol">回看：调用协议</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">2. 「工具注册表」的作用是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 限制模型只能调用登记过的工具</button><button type="button" data-opt="B">B. 给工具排序</button><button type="button" data-opt="C">C. 记录谁用了工具</button></div><div class="quiz-feedback"><span class="mark"></span> 注册表是「工具名 → 函数」的映射，模型无法调用没登记的工具。 <a href="#sec-registry">回看：注册表</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 模型拿到工具时，实际「看到」的是什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 一份 JSON 说明书：名字 + 说明 + 参数格式</button><button type="button" data-opt="B">B. 工具的全部 Python 源码</button><button type="button" data-opt="C">C. 数据库里的调用记录</button></div><div class="quiz-feedback"><span class="mark"></span> 模型看到的是 JSON Schema 说明书，不是实现代码；执行由程序在本地完成。 <a href="#sec-basic">回看：工具 = 函数 + 说明</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>工具 = 名字 + 说明书（JSON Schema）+ 函数。</li><li>模型只发 tool_use 请求，程序查注册表执行并回填 tool_result。</li><li>工具调用前要先过权限闸门。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

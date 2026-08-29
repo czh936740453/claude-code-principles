@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 05 章 · 权限与安全 — Claude Code 原理图解</title>
+<meta name="description" content="四种权限模式、YOLO 风险分级、allowlist / denylist，安全边界如何工作。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch05">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">05</span><div class="chapter-tag">PART 2 · 核心机制篇 · 它怎么工作</div><h1>05 · 权限与安全</h1><p class="goal">搞懂「Claude 凭什么能跑我的命令」：权限模式、YOLO 分类器、命令注入检查。</p></div><div class="meta-card"><span><b>本章目标</b>　搞懂「Claude 凭什么能跑我的命令」：权限模式、YOLO 分类器、命令注入检查。</span><span><b>前置依赖</b>　建议先读第 3、4 章。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-problem"><span class="h2-num">05 /</span>问题：Claude 凭什么能跑我的命令？</h2>
+<p>工具给了 Claude Code 操作你电脑的能力，但能力越大责任越大：它跑 <code>rm -rf</code> 怎么办？所以每个工具调用在真正执行前，都要过<strong>权限检查</strong>。这套系统的核心是两样东西：<strong>权限模式</strong>和 <strong>YOLO 分类器</strong>。</p>
+<h2 id="sec-modes"><span class="h2-num">05 /</span>四种权限模式</h2>
+<table><thead><tr><th>模式</th><th>行为</th><th>适用</th></tr></thead><tbody><tr><td>default（默认）</td><td>低风险自动执行，中高风险问你</td><td>日常使用</td></tr><tr><td>acceptEdits</td><td>文件编辑类自动接受，命令仍要问</td><td>写代码为主</td></tr><tr><td>plan</td><td>只规划、不执行任何工具</td><td>先讨论方案</td></tr><tr><td>bypassPermissions</td><td>跳过全部确认直接执行</td><td>完全信任的场景（危险）</td></tr></tbody></table>
+<h2 id="sec-yolo"><span class="h2-num">05 /</span>YOLO：给风险分级</h2>
+<p>YOLO 是代码里的一个分类器（函数名 <code>classifyYoloAction</code>）：把每个工具调用按危险程度分成 <code>LOW / MEDIUM / HIGH</code> 三档，再决定：</p>
+<ul><li><strong>LOW</strong>（如读文件）→ 直接放行，不打扰你。</li><li><strong>MEDIUM</strong>（如改文件）→ 弹窗问你一句。</li><li><strong>HIGH</strong>（如 <code>rm -rf</code>）→ 拒绝或强烈确认。</li></ul>
+<p>下面这个交互演示，带你走一遍完整决策流程：</p>
+<div class="demo" id="treeDemo"><p class="demo-title">走一遍权限决策流程（点击分支）</p><div class="tree-root"></div><div class="demo-ctrl"><button class="btn btn-reset">重新开始</button><span class="status"></span></div></div>
+<h2 id="sec-lists"><span class="h2-num">05 /</span>allowlist / denylist：手动写死的规则</h2>
+<p>除了自动分级，你还可以手动指定规则。在 <code>~/.claude/settings.json</code> 里配置：</p>
+<figure class="codeblock" data-lang="json"><pre class="codebody"><code>{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",        // 白名单：git status 永远放行
+      "Read(~/.zshrc)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",            // 黑名单：rm -rf 永远拒绝
+      "Bash(shutdown:*)"
+    ]
+  }
+}</code></pre></figure>
+<h2 id="sec-inject"><span class="h2-num">05 /</span>命令注入检查：防止「披着羊皮的狼」</h2>
+<p>还有一种攻击叫<strong>命令注入</strong>：看起来在跑安全命令，实际夹带了危险操作，比如 <code>ls; rm -rf /</code>。Claude Code 会在执行前检查命令内容，识别这类绕过手段。源码里甚至有 <code>DISABLE_COMMAND_INJECTION_CHECK</code> 这样的开关——默认开着，关掉非常危险。</p>
+<figure class="codeblock" data-file="permissions.py" data-lang="python"><pre class="codebody"><code>"""
+permissions.py —— YOLO 式风险分级器骨架（配合第 5 章）
+
+真实 Claude Code 里有个 classifyYoloAction()，用「危险程度」决定
+一个工具调用要不要先问用户。这里用规则模拟同一思路：
+    低风险 -&gt; 直接放行；中风险 -&gt; 询问；高风险 -&gt; 拒绝。
+
+用法:
+    python permissions.py
+"""
+from __future__ import annotations
+from dataclasses import dataclass
+
+# 风险等级：数字越大越危险
+LOW, MEDIUM, HIGH = 1, 2, 3
+
+# 一条规则：命令里出现这些词，风险升一级
+RISKY_KEYWORDS = {
+    "rm": HIGH, "format": HIGH, "shutdown": HIGH,
+    "drop": HIGH, "delete": HIGH, "mv": MEDIUM, "chmod": MEDIUM,
+}
+
+@dataclass
+class Decision:
+    level: int
+    action: str          # allow / ask / deny
+    reason: str
+
+
+def classify_yolo(action: str, command: str, mode: str) -&gt; Decision:
+    """模拟 YOLO 分类：动作 + 命令 + 权限模式 -&gt; 决策。"""
+    level = LOW
+    for word, risk in RISKY_KEYWORDS.items():
+        if word in command.lower():
+            level = max(level, risk)
+
+    if mode == "bypassPermissions":
+        return Decision(level, "allow", "bypass 模式：全部放行")
+    if mode == "plan":
+        return Decision(level, "deny", "plan 模式：只规划不执行")
+
+    if level == HIGH:
+        return Decision(level, "deny", f"高风险命令，拒绝执行（{command}）")
+    if level == MEDIUM:
+        return Decision(level, "ask", f"中风险，需要用户确认（{command}）")
+    return Decision(level, "allow", f"低风险，自动放行（{command}）")
+
+
+def main() -&gt; None:
+    tests = [
+        ("Bash", "ls -la", "default"),
+        ("Bash", "rm -rf /tmp/x", "default"),
+        ("Bash", "mv a.txt b.txt", "default"),
+        ("Bash", "rm -rf /tmp/x", "plan"),
+        ("Bash", "rm -rf /tmp/x", "bypassPermissions"),
+    ]
+    for action, command, mode in tests:
+        d = classify_yolo(action, command, mode)
+        print(f"[{mode:&gt;16}] {command:&lt;22} -&gt; {d.action:&lt;5} (风险{d.level}, {d.reason})")
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure>
+<div class="callout warn"><span class="co-label">安全底线</span>权限系统是「默认信任 + 分级确认」，不是万能保险。永远不要在 <code>bypassPermissions</code> 下跑不确定的命令，也不要把 API Key 交给不信任的来源。</div>
+<div class="quiz"><div class="quiz-item" data-answer="A"><p class="quiz-q">1. 「YOLO 分类器」主要做什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 给工具调用按风险分级并决定放行/询问/拒绝</button><button type="button" data-opt="B">B. 给代码提速</button><button type="button" data-opt="C">C. 压缩上下文</button></div><div class="quiz-feedback"><span class="mark"></span> classifyYoloAction 把调用分为 LOW/MEDIUM/HIGH 三档，对应自动放行、询问、拒绝。 <a href="#sec-yolo">回看：YOLO</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">2. 在 plan 模式下，模型能执行 Bash 工具吗？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 能，但会先问你</button><button type="button" data-opt="B">B. 不能，只规划不执行</button><button type="button" data-opt="C">C. 取决于命令长短</button></div><div class="quiz-feedback"><span class="mark"></span> plan 模式拒绝执行任何工具，只输出计划等你批准。 <a href="#sec-modes">回看：权限模式</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. allowlist / denylist（白/黑名单）的作用是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 手动写死规则：名单内放行、名单外拒绝</button><button type="button" data-opt="B">B. 让所有命令都必须确认</button><button type="button" data-opt="C">C. 提高模型的推理速度</button></div><div class="quiz-feedback"><span class="mark"></span> 除了自动风险分级，你还可以在 settings.json 里手动指定永远放行或永远拒绝的规则。 <a href="#sec-lists">回看：allowlist / denylist</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>权限模式：default / acceptEdits / plan / bypassPermissions。</li><li>YOLO 分类器按风险分级：LOW 放行、MEDIUM 询问、HIGH 拒绝。</li><li>allowlist/denylist 手动写死规则；命令注入检查默认开启。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

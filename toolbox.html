@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>代码库 · 随时调用 — Claude Code 原理图解</title>
+<meta name="description" content="Claude Code 原理配套封装代码">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="toolbox">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="index.html">首页</a><a class="nav-ch" href="docs/ch01.html">章节</a><a class="nav-glossary" href="glossary.html">术语表</a><a class="nav-toolbox active" href="toolbox.html">代码库</a><a class="nav-about" href="about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><div class="chapter-tag">CODE LAB · READY TO RUN</div><h1>代码库</h1><p class="goal">全部封装好的零依赖 Python 模块，复制或下载即可运行。每个模块对应一个章节的原理，注释里写清了「为什么这样写」。</p></div><div class="tool-filter"><select id="toolFilterChapter" aria-label="按章节筛选"><option value="all">全部章节</option><option value="ch01">第 01 章</option><option value="ch03">第 03 章</option><option value="ch04">第 04 章</option><option value="ch05">第 05 章</option><option value="ch06">第 06 章</option><option value="ch07">第 07 章</option><option value="ch08">第 08 章</option></select><input id="toolFilterText" type="text" placeholder="输入关键词筛选…" aria-label="按关键词筛选"></div><div class="tool-card" data-ch="ch01"><div class="tc-head"><code>mini_agent.py</code><a class="tc-ch" href="docs/ch01.html">第 01 章 · 认识 Claude Code →</a></div><p class="tc-desc">认识「代理」的最小雏形：一个读目标 → 决定 → 动手 → 看结果的循环骨架。</p><div class="runsteps">运行：<kbd>python mini_agent.py</kbd></div><figure class="codeblock" data-file="mini_agent.py" data-lang="python"><pre class="codebody"><code>"""
+mini_agent.py —— 认识「代理」的最小雏形（配合第 1 章）
+
+代理 = 一个循环：读目标 -&gt; 决定 -&gt; 动手 -&gt; 看结果 -&gt; 再决定。
+这里用函数调用模拟「模型思考」，去掉所有复杂部分，只看骨架。
+
+用法:
+    python mini_agent.py
+"""
+
+
+def 模型思考(任务, 已做):
+    """模拟大模型：按顺序给出下一步动作（真实实现是调用 API）。"""
+    if 已做 == 0:
+        return "先读取待办文件"
+    if 已做 == 1:
+        return "打印待办事项"
+    return "全部完成"
+
+
+def 动手(动作):
+    """模拟代理执行动作（真实实现是调用 Bash/读文件等工具）。"""
+    print("   [执行]", 动作)
+    return "ok"
+
+
+def main():
+    任务 = "帮我整理今日待办"
+    print("用户:", 任务)
+    for 步 in range(5):                      # 循环：代理的本体
+        下一步 = 模型思考(任务, 步)            # 1) 感知 + 决策
+        if 下一步 == "全部完成":
+            break
+        动手(下一步)                          # 2) 行动
+    print("代理: 任务结束")
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch03"><div class="tc-head"><code>agent_loop.py</code><a class="tc-ch" href="docs/ch03.html">第 03 章 · 代理循环 Agent Loop →</a></div><p class="tc-desc">最小可运行的代理循环：模拟模型返回工具调用，循环执行直到完成。</p><div class="runsteps">运行：<kbd>python agent_loop.py</kbd></div><figure class="codeblock" data-file="agent_loop.py" data-lang="python"><pre class="codebody"><code>"""
+agent_loop.py —— 最小可运行的「代理循环」(Agent Loop)（配合第 3 章）
+
+真实 Claude Code 的核心就是一个 while 循环：
+    感知当前状态 -&gt; 模型决定下一步 -&gt; 调用工具 -&gt; 把结果放回上下文 -&gt; 继续
+这里用 mock_model() 模拟「模型」，用工具表模拟「工具」，把循环本身跑给你看。
+
+用法:
+    python agent_loop.py
+"""
+from __future__ import annotations
+import time
+
+# ---------- 1. 模拟的「大模型」：根据状态决定下一步 ----------
+def mock_model(step: int, history: list) -&gt; dict:
+    """真实场景中这里调用 Anthropic API，返回文本或 tool_use。"""
+    if step == 0:
+        return {"kind": "tool_use", "name": "read_file", "input": {"path": "notes.txt"}}
+    if step == 1:
+        return {"kind": "tool_use", "name": "bash", "input": {"command": "echo 完成 &gt;&gt; notes.txt"}}
+    return {"kind": "text", "text": "任务完成，笔记已更新。"}
+
+# ---------- 2. 工具注册表 + 执行器 ----------
+def read_file(path: str) -&gt; str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "(文件不存在，工具已安全返回)"
+
+def bash(command: str) -&gt; str:
+    return f"(模拟执行: {command})"
+
+TOOLS = {"read_file": read_file, "bash": bash}   # 名字 -&gt; 函数，这就是工具表
+
+# ---------- 3. 代理主循环 ----------
+def main() -&gt; None:
+    step, history = 0, []
+    for _ in range(10):                       # 最大步数保护，防止死循环
+        msg = mock_model(step, history)       # 1) 感知 + 决策
+        if msg["kind"] == "text":
+            print("[Agent]", msg["text"])     # 模型认为任务完成
+            break
+        tool = TOOLS[msg["name"]]             # 2) 行动：查表执行工具
+        result = tool(**msg["input"])
+        print(f"[工具] {msg['name']}{msg['input']} -&gt; {result}")
+        history.append(result)                # 3) 观察：结果放回历史
+        step += 1
+        time.sleep(0.3)                       # 放慢，便于观察循环
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch04"><div class="tc-head"><code>tools.py</code><a class="tc-ch" href="docs/ch04.html">第 04 章 · 工具系统 →</a></div><p class="tc-desc">工具注册表 + 调度器：工具 = 名字 + 说明 + 函数，模型只能调用登记过的工具。</p><div class="runsteps">运行：<kbd>python tools.py</kbd></div><figure class="codeblock" data-file="tools.py" data-lang="python"><pre class="codebody"><code>"""
+tools.py —— 工具系统的迷你实现（配合第 4 章）
+
+核心思想：工具 = 一个名字 + 一段说明 + 一个函数。
+代理拿到模型的 tool_use 请求后，查表 -&gt; 校验参数 -&gt; 执行 -&gt; 返回结果。
+
+用法:
+    python tools.py
+"""
+from __future__ import annotations
+
+
+class Tool:
+    """一个工具：名字、用途说明、参数说明、真正的函数。"""
+
+    def __init__(self, name: str, description: str, func, params: dict):
+        self.name = name
+        self.description = description      # 给模型看的说明
+        self.func = func                    # 真正执行的函数
+        self.params = params                # 参数说明（真实场景是 JSON Schema）
+
+    def run(self, **kwargs):
+        # 参数校验：只允许声明过的参数，防止乱传
+        unknown = set(kwargs) - set(self.params)
+        if unknown:
+            raise ValueError(f"未知参数: {unknown}")
+        return self.func(**kwargs)
+
+
+def _read(path: str) -&gt; str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "(文件不存在)"
+
+def _bash(command: str) -&gt; str:
+    return f"(模拟执行: {command})"
+
+
+def build_tool_registry() -&gt; dict[str, Tool]:
+    """返回工具注册表：模型只能调用这里登记的工具。"""
+    return {
+        "read_file": Tool(
+            "read_file", "读取指定文件的全部内容", _read,
+            {"path": "要读取的文件路径"},
+        ),
+        "bash": Tool(
+            "bash", "执行一条 shell 命令并返回输出", _bash,
+            {"command": "要执行的命令"},
+        ),
+    }
+
+
+def dispatch(registry: dict[str, Tool], name: str, args: dict) -&gt; str:
+    """调度器：名字 -&gt; 查表 -&gt; 执行。找不到就报错，绝不静默。"""
+    if name not in registry:
+        return f"(错误: 没有叫 {name} 的工具)"
+    return registry[name].run(**args)
+
+
+def main() -&gt; None:
+    registry = build_tool_registry()
+    # 模拟一次工具调用协议：模型返回 tool_use，代理调度，结果回填
+    calls = [
+        ("read_file", {"path": "demo.txt"}),
+        ("bash", {"command": "echo hello"}),
+        ("不存在的工具", {}),
+    ]
+    for name, args in calls:
+        print(f"tool_use: {name}{args}")
+        print("   -&gt;", dispatch(registry, name, args))
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch05"><div class="tc-head"><code>permissions.py</code><a class="tc-ch" href="docs/ch05.html">第 05 章 · 权限与安全 →</a></div><p class="tc-desc">YOLO 式风险分级器骨架：按命令危险程度决定放行 / 询问 / 拒绝。</p><div class="runsteps">运行：<kbd>python permissions.py</kbd></div><figure class="codeblock" data-file="permissions.py" data-lang="python"><pre class="codebody"><code>"""
+permissions.py —— YOLO 式风险分级器骨架（配合第 5 章）
+
+真实 Claude Code 里有个 classifyYoloAction()，用「危险程度」决定
+一个工具调用要不要先问用户。这里用规则模拟同一思路：
+    低风险 -&gt; 直接放行；中风险 -&gt; 询问；高风险 -&gt; 拒绝。
+
+用法:
+    python permissions.py
+"""
+from __future__ import annotations
+from dataclasses import dataclass
+
+# 风险等级：数字越大越危险
+LOW, MEDIUM, HIGH = 1, 2, 3
+
+# 一条规则：命令里出现这些词，风险升一级
+RISKY_KEYWORDS = {
+    "rm": HIGH, "format": HIGH, "shutdown": HIGH,
+    "drop": HIGH, "delete": HIGH, "mv": MEDIUM, "chmod": MEDIUM,
+}
+
+@dataclass
+class Decision:
+    level: int
+    action: str          # allow / ask / deny
+    reason: str
+
+
+def classify_yolo(action: str, command: str, mode: str) -&gt; Decision:
+    """模拟 YOLO 分类：动作 + 命令 + 权限模式 -&gt; 决策。"""
+    level = LOW
+    for word, risk in RISKY_KEYWORDS.items():
+        if word in command.lower():
+            level = max(level, risk)
+
+    if mode == "bypassPermissions":
+        return Decision(level, "allow", "bypass 模式：全部放行")
+    if mode == "plan":
+        return Decision(level, "deny", "plan 模式：只规划不执行")
+
+    if level == HIGH:
+        return Decision(level, "deny", f"高风险命令，拒绝执行（{command}）")
+    if level == MEDIUM:
+        return Decision(level, "ask", f"中风险，需要用户确认（{command}）")
+    return Decision(level, "allow", f"低风险，自动放行（{command}）")
+
+
+def main() -&gt; None:
+    tests = [
+        ("Bash", "ls -la", "default"),
+        ("Bash", "rm -rf /tmp/x", "default"),
+        ("Bash", "mv a.txt b.txt", "default"),
+        ("Bash", "rm -rf /tmp/x", "plan"),
+        ("Bash", "rm -rf /tmp/x", "bypassPermissions"),
+    ]
+    for action, command, mode in tests:
+        d = classify_yolo(action, command, mode)
+        print(f"[{mode:&gt;16}] {command:&lt;22} -&gt; {d.action:&lt;5} (风险{d.level}, {d.reason})")
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch06"><div class="tc-head"><code>session.py</code><a class="tc-ch" href="docs/ch06.html">第 06 章 · 会话与上下文管理 →</a></div><p class="tc-desc">会话保存 / 恢复的最小实现：把消息历史序列化成 JSON 存盘，下次读回来。</p><div class="runsteps">运行：<kbd>python session.py</kbd></div><figure class="codeblock" data-file="session.py" data-lang="python"><pre class="codebody"><code>"""
+session.py —— 会话保存 / 恢复的最小实现（配合第 6 章）
+
+Claude Code 把一次对话存成「会话」：重启后还能接着聊。
+原理很简单：把消息历史序列化成 JSON 存到磁盘，下次再读回来。
+
+用法:
+    python session.py
+"""
+from __future__ import annotations
+import json, os, tempfile
+
+
+class Session:
+    """一个会话：一堆消息 + 能存盘 / 能恢复。"""
+
+    def __init__(self, session_id: str, messages: list | None = None):
+        self.session_id = session_id
+        self.messages = messages or []
+
+    def add(self, role: str, content: str) -&gt; None:
+        self.messages.append({"role": role, "content": content})
+
+    def save(self, path: str) -&gt; None:
+        data = {"session_id": self.session_id, "messages": self.messages}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def load(cls, path: str) -&gt; "Session":
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return cls(data["session_id"], data["messages"])
+
+
+def main() -&gt; None:
+    path = os.path.join(tempfile.gettempdir(), "cc_session_demo.json")
+
+    # 第一次运行：新会话，聊两句，存盘
+    s = Session("demo-001")
+    s.add("user", "帮我写个问候函数")
+    s.add("assistant", "好的：def hi(): print('你好')")
+    s.save(path)
+    print("已保存会话:", path)
+
+    # 模拟重启：从磁盘恢复，接着聊
+    s2 = Session.load(path)
+    print("恢复后历史条数:", len(s2.messages))
+    s2.add("user", "再加一句再见")
+    s2.save(path)
+    print("追加后历史条数:", len(s2.messages))
+    for m in s2.messages:
+        print(f"  [{m['role']}] {m['content']}")
+
+    os.remove(path)
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch06"><div class="tc-head"><code>context_manager.py</code><a class="tc-ch" href="docs/ch06.html">第 06 章 · 会话与上下文管理 →</a></div><p class="tc-desc">token 估算 + 压缩触发：计算上下文占用，超过阈值自动把旧消息压成摘要。</p><div class="runsteps">运行：<kbd>python context_manager.py</kbd></div><figure class="codeblock" data-file="context_manager.py" data-lang="python"><pre class="codebody"><code>"""
+context_manager.py —— token 估算 + 压缩触发（配合第 6 章）
+
+上下文窗口是稀缺资源。代理每轮都要算：现在用了多少 token？
+超过阈值就触发「压缩」（compact）：把旧消息浓缩成摘要，腾出空间。
+
+用法:
+    python context_manager.py
+"""
+from __future__ import annotations
+
+# 粗略估算：中文约 1 字 ≈ 1 token，英文约 4 字符 ≈ 1 token
+def estimate_tokens(text: str) -&gt; int:
+    cjk = sum(1 for ch in text if "\u4e00" &lt;= ch &lt;= "\u9fff")
+    other = len(text) - cjk
+    return cjk + max(1, other // 4)
+
+
+class ContextManager:
+    def __init__(self, window: int = 200_000, compact_ratio: float = 0.8):
+        self.window = window                  # 上下文窗口大小（token）
+        self.ratio = compact_ratio            # 到达窗口 80% 就压缩
+        self.history: list[dict] = []
+
+    @property
+    def usage(self) -&gt; int:
+        return sum(estimate_tokens(m["content"]) for m in self.history)
+
+    @property
+    def should_compact(self) -&gt; bool:
+        return self.usage &gt;= self.window * self.ratio
+
+    def add(self, role: str, content: str) -&gt; None:
+        self.history.append({"role": role, "content": content})
+        if self.should_compact:
+            self.compact()
+
+    def compact(self) -&gt; None:
+        """把最早的一半消息压成一段摘要（真实实现会调用模型生成摘要）。"""
+        old = self.history[: len(self.history) // 2]
+        kept = self.history[len(self.history) // 2 :]
+        digest = "「摘要」" + "；".join(m["content"][:20] for m in old)
+        self.history = [{"role": "system", "content": digest}] + kept
+        print(f"   [压缩] {len(old)} 条旧消息 -&gt; 1 条摘要，当前 {self.usage} tokens")
+
+
+def main() -&gt; None:
+    cm = ContextManager(window=200, compact_ratio=0.6)   # 小窗口，方便演示
+    for i in range(10):
+        cm.add("user", f"第 {i} 条消息：" + "很长的内容" * 10)
+        print(f"写入后 {cm.usage} tokens / 窗口 {cm.window}")
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch07"><div class="tc-head"><code>cli_repl.py</code><a class="tc-ch" href="docs/ch07.html">第 07 章 · CLI 与斜杠命令 →</a></div><p class="tc-desc">极简交互式 REPL：提示符 → 读输入 → 解析斜杠命令 → 响应 → 循环。</p><div class="runsteps">运行：<kbd>python cli_repl.py</kbd></div><figure class="codeblock" data-file="cli_repl.py" data-lang="python"><pre class="codebody"><code>"""
+cli_repl.py —— 极简交互式 REPL（配合第 7 章）
+
+Claude Code 的交互模式本质是一个 REPL：
+    打印提示符 -&gt; 读一行输入 -&gt; 解析（斜杠命令? 普通对话?）-&gt; 响应 -&gt; 循环
+
+用法:
+    python cli_repl.py
+    在提示符后输入：hello、/help、/status、/quit
+"""
+from __future__ import annotations
+
+def handle_slash(cmd: str) -&gt; str:
+    """斜杠命令分发：/开头的指令走这里。"""
+    if cmd == "/help":
+        return "可用命令: /help /status /quit；直接输入文字开始对话"
+    if cmd == "/status":
+        return "会话: demo | 模式: default | 已用上下文: 12%"
+    if cmd == "/quit":
+        return "__QUIT__"
+    return f"(未知命令 {cmd}，试试 /help)"
+
+
+def main() -&gt; None:
+    print("Claude Code 迷你版（输入 /quit 退出）")
+    while True:
+        try:
+            line = input("&gt; ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n再见")
+            break
+        if not line:
+            continue
+        if line.startswith("/"):
+            reply = handle_slash(line)
+            if reply == "__QUIT__":
+                print("再见")
+                break
+        else:
+            reply = f"[模拟模型] 你说的是：{line}"
+        print(reply)
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div><div class="tool-card" data-ch="ch08"><div class="tc-head"><code>config.py</code><a class="tc-ch" href="docs/ch08.html">第 08 章 · 配置、环境变量与特性门控 →</a></div><p class="tc-desc">环境变量解析 + 特性开关：用环境变量覆盖默认值，控制功能开不开。</p><div class="runsteps">运行：<kbd>python config.py</kbd><kbd>CLAUDECODE_COORDINATOR_MODE=1 python config.py</kbd></div><figure class="codeblock" data-file="config.py" data-lang="python"><pre class="codebody"><code>"""
+config.py —— 环境变量解析 + 特性开关（配合第 8 章）
+
+真实 Claude Code 用环境变量和 feature flag 控制行为。
+这里演示：读环境变量 -&gt; 分层（默认 &lt; 环境变量）-&gt; 决定某个特性开不开。
+
+用法:
+    python config.py
+    CLAUDE_CODE_COORDINATOR_MODE=1 python config.py   # 试试开启协调者模式
+"""
+from __future__ import annotations
+import os
+
+# 特性开关表：名字 -&gt; (默认值, 说明)
+FEATURES = {
+    "COORDINATOR_MODE": (False, "多代理协调模式（manager 拆任务给多个 worker）"),
+    "DAEMON":           (False, "后台守护模式（像系统服务一样跑会话）"),
+    "KAIROS":           (False, "跨会话记忆（KAIROS）"),
+    "BUDDY":            (False, "宠物彩蛋（BUDDY）"),
+}
+
+def feature_enabled(name: str) -&gt; bool:
+    """环境变量覆盖默认值：CLAUDECODE_&lt;NAME&gt;=1 即开启。"""
+    if name not in FEATURES:
+        return False
+    default, _ = FEATURES[name]
+    key = f"CLAUDECODE_{name}"
+    if key in os.environ:
+        return os.environ[key] not in ("0", "false", "")
+    return default
+
+def main() -&gt; None:
+    print("当前特性开关状态：")
+    for name, (default, desc) in FEATURES.items():
+        state = "开" if feature_enabled(name) else "关"
+        print(f"  {name:&lt;18} {state}  (默认{'开' if default else '关'}，{desc})")
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="assets/js/nav.js"></script>
+<script src="assets/js/main.js"></script>
+</body>
+</html>

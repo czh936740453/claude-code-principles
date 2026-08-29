@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 03 章 · 代理循环 Agent Loop — Claude Code 原理图解</title>
+<meta name="description" content="核心 while 循环：为什么它是「代理」而不是「单次问答」，用伪代码和可运行例子讲透。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch03">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">03</span><div class="chapter-tag">PART 2 · 核心机制篇 · 它怎么工作</div><h1>03 · 代理循环 Agent Loop</h1><p class="goal">掌握 Claude Code 的心脏——while 循环：感知、决策、行动、观察，循环往复直到完成。</p></div><div class="meta-card"><span><b>本章目标</b>　掌握 Claude Code 的心脏——while 循环：感知、决策、行动、观察，循环往复直到完成。</span><span><b>前置依赖</b>　建议先读第 2 章。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-loop"><span class="h2-num">03 /</span>核心：一个 while 循环</h2>
+<p>Claude Code 的心脏非常朴素——一个 <code>while</code> 循环。翻译成大白话就是：<strong>只要还没干完，就一直干下去</strong>。每一次循环做四件事：</p>
+<ol class="steps"><li><b>感知</b>看看当前状态：任务是什么、已经做到哪一步、上一步的结果是什么。</li><li><b>决策</b>把状态交给模型，让模型决定下一步：继续说、还是调用工具。</li><li><b>行动</b>如果要调用工具，就在本地执行它。</li><li><b>观察</b>把工具结果放回上下文，回到第 1 步。</li></ol>
+<p>用伪代码写出来就是这样（注意 <code>while</code> 和 <code>continue</code>）：</p>
+<figure class="codeblock" data-lang="python"><pre class="codebody"><code>while 任务未完成:
+    状态 = 收集当前上下文          # 感知
+    决定 = 模型(状态)             # 决策
+    if 决定是普通文本:
+        输出给用户, 结束          # 完成
+    if 决定是调用工具:
+        结果 = 执行工具(决定)     # 行动
+        把结果放回上下文          # 观察
+    # 回到 while，继续下一轮</code></pre></figure>
+<div class="demo" id="loopDemo"><p class="demo-title">试着走一轮代理循环（点击“下一步”）</p><div class="loop-grid"><div class="loop-cell"><span class="ic">01</span><b>感知</b>读取当前状态</div><div class="loop-cell"><span class="ic">02</span><b>决策</b>模型决定下一步</div><div class="loop-cell"><span class="ic">03</span><b>行动</b>调用工具</div><div class="loop-cell"><span class="ic">04</span><b>观察</b>结果回填上下文</div></div><div class="demo-log"></div><div class="demo-ctrl"><button class="btn btn-next">下一步</button><button class="btn btn-reset">重置</button><span class="status"></span></div></div>
+<h2 id="sec-why"><span class="h2-num">03 /</span>为什么它叫「代理」而不是「问答」</h2>
+<p>聊天机器人只执行<strong>一次</strong>「输入 → 输出」。代理把这个过程<strong>循环</strong>起来，并且每一步都能<strong>观察结果再决定下一步</strong>——所以它能处理多步骤、需要动手的任务。有没有工具、能不能循环，是代理和聊天的分水岭。</p>
+<h2 id="sec-end"><span class="h2-num">03 /</span>什么时候结束：终止条件</h2>
+<p>循环不能永远跑下去，Claude Code 靠三种方式结束：</p>
+<ul><li><strong>模型主动结束</strong>：模型返回普通文本（不再要求调用工具），认为任务完成。</li><li><strong>达到上限</strong>：步数上限、token 预算用尽，强制停止。</li><li><strong>用户打断</strong>：Ctrl+C 或输入 <code>/quit</code> 退出。</li></ul>
+<h2 id="sec-run"><span class="h2-num">03 /</span>跑一个真实的「最小循环」</h2>
+<p><code>agent_loop.py</code> 把这个循环真实地跑给你看：<code>mock_model()</code> 模拟「模型」返回工具调用，<code>TOOLS</code> 模拟「工具表」，主循环负责把它们串起来：</p>
+<figure class="codeblock" data-file="agent_loop.py" data-lang="python"><pre class="codebody"><code>"""
+agent_loop.py —— 最小可运行的「代理循环」(Agent Loop)（配合第 3 章）
+
+真实 Claude Code 的核心就是一个 while 循环：
+    感知当前状态 -&gt; 模型决定下一步 -&gt; 调用工具 -&gt; 把结果放回上下文 -&gt; 继续
+这里用 mock_model() 模拟「模型」，用工具表模拟「工具」，把循环本身跑给你看。
+
+用法:
+    python agent_loop.py
+"""
+from __future__ import annotations
+import time
+
+# ---------- 1. 模拟的「大模型」：根据状态决定下一步 ----------
+def mock_model(step: int, history: list) -&gt; dict:
+    """真实场景中这里调用 Anthropic API，返回文本或 tool_use。"""
+    if step == 0:
+        return {"kind": "tool_use", "name": "read_file", "input": {"path": "notes.txt"}}
+    if step == 1:
+        return {"kind": "tool_use", "name": "bash", "input": {"command": "echo 完成 &gt;&gt; notes.txt"}}
+    return {"kind": "text", "text": "任务完成，笔记已更新。"}
+
+# ---------- 2. 工具注册表 + 执行器 ----------
+def read_file(path: str) -&gt; str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "(文件不存在，工具已安全返回)"
+
+def bash(command: str) -&gt; str:
+    return f"(模拟执行: {command})"
+
+TOOLS = {"read_file": read_file, "bash": bash}   # 名字 -&gt; 函数，这就是工具表
+
+# ---------- 3. 代理主循环 ----------
+def main() -&gt; None:
+    step, history = 0, []
+    for _ in range(10):                       # 最大步数保护，防止死循环
+        msg = mock_model(step, history)       # 1) 感知 + 决策
+        if msg["kind"] == "text":
+            print("[Agent]", msg["text"])     # 模型认为任务完成
+            break
+        tool = TOOLS[msg["name"]]             # 2) 行动：查表执行工具
+        result = tool(**msg["input"])
+        print(f"[工具] {msg['name']}{msg['input']} -&gt; {result}")
+        history.append(result)                # 3) 观察：结果放回历史
+        step += 1
+        time.sleep(0.3)                       # 放慢，便于观察循环
+
+if __name__ == "__main__":
+    main()</code></pre></figure>
+<div class="callout tip"><span class="co-label">动手试</span>把 <code>agent_loop.py</code> 下载下来运行，观察终端输出：先调 <code>read_file</code>，再调 <code>bash</code>，最后模型认为完成、输出文字结束。这就是代理循环的最小形态。</div>
+<div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. 代理循环每一步的顺序是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 决策 → 感知 → 行动 → 观察</button><button type="button" data-opt="B">B. 感知 → 决策 → 行动 → 观察</button><button type="button" data-opt="C">C. 行动 → 观察 → 感知 → 决策</button></div><div class="quiz-feedback"><span class="mark"></span> 先感知当前状态，再决策下一步，然后行动（调用工具），最后观察结果，回到循环。 <a href="#sec-loop">回看：核心</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">2. 循环什么时候正常结束？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 模型返回普通文本不再调用工具</button><button type="button" data-opt="B">B. 永远不结束</button><button type="button" data-opt="C">C. 每轮固定执行 100 次</button></div><div class="quiz-feedback"><span class="mark"></span> 模型认为任务完成、返回普通文本时结束；另有步数/token 上限和用户打断等兜底。 <a href="#sec-end">回看：终止条件</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 代理和聊天机器人的「分水岭」是什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 能不能循环、有没有工具</button><button type="button" data-opt="B">B. 界面颜色不一样</button><button type="button" data-opt="C">C. 模型参数更多</button></div><div class="quiz-feedback"><span class="mark"></span> 聊天只做一次「输入 → 输出」；代理把过程循环起来并能观察结果再决定下一步。 <a href="#sec-why">回看：为什么叫代理</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>代理循环 = while 循环：感知 → 决策 → 行动 → 观察。</li><li>能不能循环、有没有工具，是代理与聊天的分水岭。</li><li>结束方式：模型主动结束 / 达到上限 / 用户打断。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

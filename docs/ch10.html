@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 10 章 · 自学路线图与实践建议 — Claude Code 原理图解</title>
+<meta name="description" content="读源码三步法、最小复刻路线、安全与伦理边界、推荐练习。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch10">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">10</span><div class="chapter-tag">PART 4 · 研究与移植篇 · 怎么读源码 / 怎么复刻</div><h1>10 · 自学路线图与实践建议</h1><p class="goal">拿到一份可执行的行动清单：怎么读源码、怎么动手复刻、注意什么边界。</p></div><div class="meta-card"><span><b>本章目标</b>　拿到一份可执行的行动清单：怎么读源码、怎么动手复刻、注意什么边界。</span><span><b>前置依赖</b>　建议学完全部章节。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-read"><span class="h2-num">10 /</span>读源码的三步法</h2>
+<p>面对几千个文件，别从头读到尾。用三步走：</p>
+<ol class="steps"><li><b>找入口</b>先从 <code>cli.js</code> / <code>main</code> / README 找到程序从哪开始跑，画出调用链。</li><li><b>追数据流</b>盯住「一条用户输入」如何变成请求、如何变成工具调用，把主线走通。</li><li><b>再看支线</b>主线懂了以后，再去看权限、压缩、配置这些旁路，逐个击破。</li></ol>
+<h2 id="sec-clone"><span class="h2-num">10 /</span>最小复刻路线</h2>
+<p>想自己动手，不要一上来就复刻全部。按这个顺序做，每一步都对应前面章节的封装代码：</p>
+<ol class="steps"><li><b>最小代理循环</b>拿第 3 章的 <code>agent_loop.py</code>，把「模拟模型」换成真实 API 调用。</li><li><b>加工具</b>把第 4 章的 <code>tools.py</code> 接进来：注册表 + 分派。</li><li><b>加权限</b>把第 5 章的 <code>permissions.py</code> 插在工具执行之前。</li><li><b>加会话</b>用第 6 章的 <code>session.py</code> 支持断点续聊。</li><li><b>加 CLI</b>用第 7 章的 <code>cli_repl.py</code> 包一层交互界面。</li><li><b>加配置</b>用第 8 章的 <code>config.py</code> 让行为可配置。</li></ol>
+<h2 id="sec-boundary"><span class="h2-num">10 /</span>安全与伦理边界</h2>
+<div class="callout warn"><span class="co-label">红线</span>公开源码分析的用途是<strong>学习原理</strong>，不是照抄发布、也不是用于绕过付费或攻击。别把非公开功能当承诺：代码里有不代表能上线、更不代表官方支持。</div>
+<ul><li><strong>版权</strong>：源码分析可以谈原理，转载 / 商用要谨慎。</li><li><strong>安全</strong>：永远不要在 bypassPermissions 下跑不确定的命令。</li><li><strong>伦理</strong>：不做绕过鉴权、滥用 API 的实验。</li><li><strong>预期管理</strong>：分析出来的功能随时可能变化或消失。</li></ul>
+<h2 id="sec-practice"><span class="h2-num">10 /</span>推荐练习清单</h2>
+<ul><li>把 <code>agent_loop.py</code> 改成「最多循环 N 次就停止」，观察终止条件的作用。</li><li>给 <code>tools.py</code> 加一个自定义工具，比如「统计代码行数」。</li><li>用 <code>context_manager.py</code> 打印出压缩前后各占多少 token。</li><li>给 <code>cli_repl.py</code> 加一个 <code>/model</code> 命令，模拟切换模型。</li><li>把各章封装代码组装成一个完整的最小 CLI 工具。</li></ul>
+<div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. 读一份大源码，正确顺序是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 从第一个文件读到最后一个</button><button type="button" data-opt="B">B. 找入口 → 追数据流 → 再看支线</button><button type="button" data-opt="C">C. 只看 README</button></div><div class="quiz-feedback"><span class="mark"></span> 先找入口、追主线数据流，主线通了再处理支线，效率最高。 <a href="#sec-read">回看：三步法</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">2. 关于公开源码分析，下面哪种态度是对的？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 照抄发布，反正开源</button><button type="button" data-opt="B">B. 只用于学习原理，不绕过付费、不攻击、不商用转载</button><button type="button" data-opt="C">C. 分析里的功能一定会上线</button></div><div class="quiz-feedback"><span class="mark"></span> 源码分析用于学习；非公开功能不代表承诺，安全与伦理边界要守住。 <a href="#sec-boundary">回看：安全与伦理</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 按「最小复刻路线」，第一步应该做什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 先做一个最小代理循环，再把模拟模型换成真实 API</button><button type="button" data-opt="B">B. 一上来就复刻全部功能</button><button type="button" data-opt="C">C. 先写配置系统</button></div><div class="quiz-feedback"><span class="mark"></span> 从第 3 章的 agent_loop.py 起步，再逐步加工具、权限、会话、CLI、配置。 <a href="#sec-clone">回看：最小复刻</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>读源码三步法：找入口 → 追数据流 → 再看支线。</li><li>最小复刻从 agent loop 起步，逐步加工具、权限、会话、CLI、配置。</li><li>守住安全与伦理边界：学习原理，不照抄滥用。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

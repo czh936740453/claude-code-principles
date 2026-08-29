@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 02 章 · 一次对话的完整旅程 — Claude Code 原理图解</title>
+<meta name="description" content="端到端数据流：输入 → 上下文组装 → API → 工具调用 → 循环，一张图看懂全流程。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch02">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">02</span><div class="chapter-tag">PART 1 · 认知篇 · 它是什么</div><h1>02 · 一次对话的完整旅程</h1><p class="goal">跟着一次真实对话走一遍：从你按下回车，到它给出答案，中间到底发生了什么。</p></div><div class="meta-card"><span><b>本章目标</b>　跟着一次真实对话走一遍：从你按下回车，到它给出答案，中间到底发生了什么。</span><span><b>前置依赖</b>　建议先读第 1 章。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-journey"><span class="h2-num">02 /</span>全景图：一次对话发生了什么</h2>
+<p>把「你按下回车」到「它给出答案」之间的过程拆开，一共是七步。别被术语吓到，跟着走一遍就懂：</p>
+<ol class="steps"><li><b>启动 CLI</b>你在终端输入 <code>claude "帮我看看这个项目"</code>，程序开始运行。</li><li><b>装载上下文</b>它把「系统提示 + CLAUDE.md + 会话历史 + 工具定义」拼成一段很长的输入。</li><li><b>发出请求</b>把这段输入发给 Anthropic 的 API（一个 HTTP 请求）。</li><li><b>流式响应</b>API 返回的内容一部分是文字，一部分是「我想调用某个工具」的请求。</li><li><b>执行工具</b>程序在本地执行工具（读文件、跑命令），把结果拿回来。</li><li><b>循环</b>把工具结果加进上下文，再次发请求……直到模型觉得任务完成。</li><li><b>输出答案</b>把最终的文字结果展示给你。</li></ol>
+<div class="callout note"><span class="co-label">记住这一句</span><strong>API 本身是无状态的</strong>：它不记得你，是 Claude Code 在本地负责「记住」并把整个历史每次重新发给它。上下文由客户端组装，这是理解后面一切的关键。</div>
+<h2 id="sec-context"><span class="h2-num">02 /</span>上下文 = 它这次能「看到」的一切</h2>
+<p>每次请求，Claude Code 都会把下面这些东西<strong>拼在一起</strong>发给 API：</p>
+<ul><li><strong>系统提示（System Prompt）</strong>：约束行为规则的「人设」，比如「你是 Claude Code，一个高效的编程助手」。</li><li><strong>CLAUDE.md</strong>：项目根目录里的说明文件，相当于给代理的「项目入职手册」。</li><li><strong>会话历史</strong>：之前的所有对话和工具结果。</li><li><strong>工具定义</strong>：每个可用工具的「名字 + 说明 + 参数格式」（JSON Schema）。</li></ul>
+<h2 id="sec-start"><span class="h2-num">02 /</span>怎么启动它</h2>
+<p>启动方式很简单（注意：Claude Code 需要 API Key 而不是订阅账号登录）：</p>
+<div class="envtabs"><div class="tabbar"><button data-pane="pwsh" class="active">PowerShell</button><button data-pane="mac" class="">macOS</button><button data-pane="linux" class="">Linux</button></div><div class="env-pane active" data-pane="pwsh"><figure class="codeblock" data-lang="bash"><pre class="codebody"><code>$env:ANTHROPIC_API_KEY = "sk-ant-..."
+claude "帮我看看这个项目"</code></pre></figure></div><div class="env-pane" data-pane="mac"><figure class="codeblock" data-lang="bash"><pre class="codebody"><code>export ANTHROPIC_API_KEY="sk-ant-..."
+claude "帮我看看这个项目"</code></pre></figure></div><div class="env-pane" data-pane="linux"><figure class="codeblock" data-lang="bash"><pre class="codebody"><code>export ANTHROPIC_API_KEY="sk-ant-..."
+claude "帮我看看这个项目"</code></pre></figure></div></div>
+<h2 id="sec-request"><span class="h2-num">02 /</span>一次请求长什么样</h2>
+<p>简化后的 API 请求就是「把上下文发给服务器」：</p>
+<figure class="codeblock" data-lang="json"><pre class="codebody"><code>{
+  "model": "claude-opus-4-6",
+  "system": "你是 Claude Code，一个高效的编程助手……",
+  "messages": [
+    {"role": "user", "content": "帮我看看这个项目"},
+    {"role": "assistant", "content": "好的，我先读取项目结构……"}
+  ],
+  "tools": [
+    {"name": "read_file", "description": "读取文件内容", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}}
+  ]
+}</code></pre></figure>
+<div class="callout warn"><span class="co-label">注意</span>上下文越长，费用越高、响应越慢。所以后面第 6 章会讲怎么「省着用」——压缩、裁剪、预算管理，这是 Claude Code 的重要工程。</div>
+<h2 id="sec-takeaway"><span class="h2-num">02 /</span>这一章的收获</h2>
+<ul><li>一次对话 = 多次请求的循环，而不是一次请求。</li><li>每次请求都重新发送完整上下文（客户端组装）。</li><li>上下文里包含：系统提示、CLAUDE.md、历史、工具定义。</li></ul>
+<div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. API 服务器记得你和 Claude Code 之前的对话吗？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 记得，服务器有记忆</button><button type="button" data-opt="B">B. 不记得，状态在客户端，历史每次重新发送</button></div><div class="quiz-feedback"><span class="mark"></span> API 是无状态的，Claude Code 在本地保存历史并每次组装进上下文。 <a href="#sec-journey">回看：全景图</a></div></div><div class="quiz-item" data-answer="C"><p class="quiz-q">2. 下面哪一项**不属于**组装进上下文的？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 系统提示</button><button type="button" data-opt="B">B. CLAUDE.md</button><button type="button" data-opt="C">C. 你的浏览器历史</button><button type="button" data-opt="D">D. 工具定义</button></div><div class="quiz-feedback"><span class="mark"></span> 上下文 = 系统提示 + CLAUDE.md + 会话历史 + 工具定义，跟浏览器历史无关。 <a href="#sec-context">回看：上下文</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 为什么上下文越长，响应越慢、费用越高？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 模型每次都要重新处理全部输入 token</button><button type="button" data-opt="B">B. 因为网络速度变慢了</button><button type="button" data-opt="C">C. 因为输出会变长</button></div><div class="quiz-feedback"><span class="mark"></span> 每次请求都完整重发上下文，模型要处理全部输入 token，所以越长越慢越贵。 <a href="#sec-request">回看：一次请求</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>一次对话是一连串「发请求 → 收响应 → 执行工具 → 再发请求」的循环。</li><li>上下文在客户端组装，每次请求完整重发。</li><li>上下文四件套：系统提示、CLAUDE.md、会话历史、工具定义。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 08 章 · 配置、环境变量与特性门控 — Claude Code 原理图解</title>
+<meta name="description" content="~/.claude/ 配置、环境变量分类、GrowthBook tengu_* 灰度开关、anthropic-beta 头。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch08">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">08</span><div class="chapter-tag">PART 3 · 外围系统篇 · 支撑它的系统</div><h1>08 · 配置、环境变量与特性门控</h1><p class="goal">看懂它「怎么被开关控制」：配置文件层级、120+ 环境变量、build flags 与 tengu 门控。</p></div><div class="meta-card"><span><b>本章目标</b>　看懂它「怎么被开关控制」：配置文件层级、120+ 环境变量、build flags 与 tengu 门控。</span><span><b>前置依赖</b>　建议先读第 3 章。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-layers"><span class="h2-num">08 /</span>配置是怎么分层的</h2>
+<p>Claude Code 的配置分散在几个地方，按优先级从低到高大致是：<strong>默认值 → 用户级 <code>~/.claude/settings.json</code> → 项目级 <code>.claude/settings.json</code> → 命令行参数 / 环境变量</strong>。越靠后的越能覆盖前面的。</p>
+<figure class="codeblock" data-lang="json"><pre class="codebody"><code>{
+  "permissions": { "allow": [], "deny": [] },
+  "model": "claude-sonnet-4-8",
+  "env": { "MY_VAR": "value" },
+  "hooks": { "PreToolUse": [] }
+}</code></pre></figure>
+<h2 id="sec-flags"><span class="h2-num">08 /</span>环境变量：120+ 个开关</h2>
+<p>环境变量是「不用改文件就能调行为」的方式。公开源码分析里发现了 <strong>120+ 个环境变量</strong>，大致分成几类：</p>
+<table><thead><tr><th>类别</th><th>作用</th><th>例子（示意）</th></tr></thead><tbody><tr><td>认证</td><td>API Key、代理地址</td><td>ANTHROPIC_API_KEY、HTTP_PROXY</td></tr><tr><td>行为</td><td>权限、输出、日志</td><td>权限模式、输出格式、调试日志</td></tr><tr><td>模型</td><td>覆盖模型选择</td><td>模型名 / 参数</td></tr><tr><td>实验</td><td>开启内部功能</td><td>各种实验性开关</td></tr></tbody></table>
+<p>原理很简单：程序启动时读环境变量，用它覆盖默认配置。下面这个模块演示「默认值 &lt; 环境变量」的分层逻辑：</p>
+<figure class="codeblock" data-file="config.py" data-lang="python"><pre class="codebody"><code>"""
+config.py —— 环境变量解析 + 特性开关（配合第 8 章）
+
+真实 Claude Code 用环境变量和 feature flag 控制行为。
+这里演示：读环境变量 -&gt; 分层（默认 &lt; 环境变量）-&gt; 决定某个特性开不开。
+
+用法:
+    python config.py
+    CLAUDE_CODE_COORDINATOR_MODE=1 python config.py   # 试试开启协调者模式
+"""
+from __future__ import annotations
+import os
+
+# 特性开关表：名字 -&gt; (默认值, 说明)
+FEATURES = {
+    "COORDINATOR_MODE": (False, "多代理协调模式（manager 拆任务给多个 worker）"),
+    "DAEMON":           (False, "后台守护模式（像系统服务一样跑会话）"),
+    "KAIROS":           (False, "跨会话记忆（KAIROS）"),
+    "BUDDY":            (False, "宠物彩蛋（BUDDY）"),
+}
+
+def feature_enabled(name: str) -&gt; bool:
+    """环境变量覆盖默认值：CLAUDECODE_&lt;NAME&gt;=1 即开启。"""
+    if name not in FEATURES:
+        return False
+    default, _ = FEATURES[name]
+    key = f"CLAUDECODE_{name}"
+    if key in os.environ:
+        return os.environ[key] not in ("0", "false", "")
+    return default
+
+def main() -&gt; None:
+    print("当前特性开关状态：")
+    for name, (default, desc) in FEATURES.items():
+        state = "开" if feature_enabled(name) else "关"
+        print(f"  {name:&lt;18} {state}  (默认{'开' if default else '关'}，{desc})")
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure>
+<h2 id="sec-gates"><span class="h2-num">08 /</span>特性门控：tengu_* 灰度</h2>
+<p>大公司发新功能不会「一键全量」，而是<strong>灰度</strong>：先给一小部分用户开，观察没问题再逐步放开。Claude Code 用了一套叫 <strong>GrowthBook</strong> 的特性门控系统，门控键以 <code>tengu_*</code> 命名（如 <code>tengu_enable_buddy</code>）。</p>
+<p>除了运行时门控，还有 <strong>32 个构建时 feature flags</strong>——它们在打包（build）时就决定代码要不要包含某个功能，比如 <code>ENABLE_COORDINATOR</code>、<code>ENABLE_KAIROS</code>、<code>ENABLE_ULTRAPLAN</code> 这类开关。</p>
+<div class="callout note"><span class="co-label">理解重点</span>特性门控 = 「代码已经写好，但开不开由开关决定」。这解释了为什么公开分析里能看到一堆没上线的功能：代码在，只是默认被门控关着。</div>
+<h2 id="sec-beta"><span class="h2-num">08 /</span>anthropic-beta 头：请求时声明实验能力</h2>
+<p>有些实验能力需要客户端在<strong>每个 API 请求</strong>里声明。Claude Code 会带上 <code>anthropic-beta</code> 请求头，比如公开分析里出现的 <code>cli-internal-2026-02-09</code> 这样的值——它告诉服务器「我要用这个内部版本的能力」。</p>
+<div class="quiz"><div class="quiz-item" data-answer="A"><p class="quiz-q">1. tengu_* 门控主要用来做什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 给新功能做灰度发布，控制开不开</button><button type="button" data-opt="B">B. 给代码加密</button><button type="button" data-opt="C">C. 加快编译速度</button></div><div class="quiz-feedback"><span class="mark"></span> tengu_* 是 GrowthBook 门控的命名空间：代码已内置、默认关闭，按比例灰度放开。 <a href="#sec-gates">回看：特性门控</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">2. 环境变量和配置文件的关系是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 环境变量可以覆盖配置文件里的默认值</button><button type="button" data-opt="B">B. 两者完全无关</button><button type="button" data-opt="C">C. 配置文件永远优先，环境变量无效</button></div><div class="quiz-feedback"><span class="mark"></span> 分层规则：默认值 &lt; settings.json &lt; 环境变量 / 命令行参数，越靠后优先级越高。 <a href="#sec-flags">回看：环境变量</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. anthropic-beta 请求头是干什么用的？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 在 API 请求里声明要使用的实验能力</button><button type="button" data-opt="B">B. 给请求加密</button><button type="button" data-opt="C">C. 加快响应速度</button></div><div class="quiz-feedback"><span class="mark"></span> 实验能力要在每个请求带上 anthropic-beta 头声明，比如公开分析里出现的 cli-internal-2026-02-09。 <a href="#sec-beta">回看：anthropic-beta</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>配置分层：默认值 &lt; settings.json &lt; 环境变量 / 命令行参数。</li><li>120+ 环境变量、32 个构建时 flags 控制行为。</li><li>tengu_* 灰度门控 + anthropic-beta 头声明实验能力。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 06 章 · 会话与上下文管理 — Claude Code 原理图解</title>
+<meta name="description" content="会话持久化、上下文窗口（200K / 1M）、token 预算与压缩机制（compact）。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ch06">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch active" href="../docs/ch01.html">章节</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">06</span><div class="chapter-tag">PART 2 · 核心机制篇 · 它怎么工作</div><h1>06 · 会话与上下文管理</h1><p class="goal">理解「上下文窗口」这个稀缺资源：会话怎么恢复、token 怎么算、快满了怎么办。</p></div><div class="meta-card"><span><b>本章目标</b>　理解「上下文窗口」这个稀缺资源：会话怎么恢复、token 怎么算、快满了怎么办。</span><span><b>前置依赖</b>　建议先读第 2、3 章。</span><button id="markDone" class="btn mark-done">标记完成</button></div><h2 id="sec-session"><span class="h2-num">06 /</span>会话：把对话「存下来」</h2>
+<p>Claude Code 每次对话都被保存成<strong>会话（Session）</strong>：包含了消息历史、工具结果、当前目录等信息。下次你想接着聊，一条命令就能恢复——这就是 <code>claude --resume</code> 背后做的事。</p>
+<p>会话文件存在<strong>本地</strong>，而不是云端。所以换一台电脑、删掉目录，历史就没了。它的实现原理很简单：<strong>把消息序列化存成文件，用时再读回来</strong>。下面这个模块就是最小版本：</p>
+<figure class="codeblock" data-file="session.py" data-lang="python"><pre class="codebody"><code>"""
+session.py —— 会话保存 / 恢复的最小实现（配合第 6 章）
+
+Claude Code 把一次对话存成「会话」：重启后还能接着聊。
+原理很简单：把消息历史序列化成 JSON 存到磁盘，下次再读回来。
+
+用法:
+    python session.py
+"""
+from __future__ import annotations
+import json, os, tempfile
+
+
+class Session:
+    """一个会话：一堆消息 + 能存盘 / 能恢复。"""
+
+    def __init__(self, session_id: str, messages: list | None = None):
+        self.session_id = session_id
+        self.messages = messages or []
+
+    def add(self, role: str, content: str) -&gt; None:
+        self.messages.append({"role": role, "content": content})
+
+    def save(self, path: str) -&gt; None:
+        data = {"session_id": self.session_id, "messages": self.messages}
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def load(cls, path: str) -&gt; "Session":
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return cls(data["session_id"], data["messages"])
+
+
+def main() -&gt; None:
+    path = os.path.join(tempfile.gettempdir(), "cc_session_demo.json")
+
+    # 第一次运行：新会话，聊两句，存盘
+    s = Session("demo-001")
+    s.add("user", "帮我写个问候函数")
+    s.add("assistant", "好的：def hi(): print('你好')")
+    s.save(path)
+    print("已保存会话:", path)
+
+    # 模拟重启：从磁盘恢复，接着聊
+    s2 = Session.load(path)
+    print("恢复后历史条数:", len(s2.messages))
+    s2.add("user", "再加一句再见")
+    s2.save(path)
+    print("追加后历史条数:", len(s2.messages))
+    for m in s2.messages:
+        print(f"  [{m['role']}] {m['content']}")
+
+    os.remove(path)
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure>
+<table><thead><tr><th>会话里存了什么</th><th>说明</th><th>例子</th></tr></thead><tbody><tr><td>消息历史</td><td>你说了什么、模型回了什么</td><td>user / assistant / tool 消息</td></tr><tr><td>工具结果</td><td>工具执行后的输出</td><td>文件内容、命令输出</td></tr><tr><td>元信息</td><td>会话 id、当前目录、模型</td><td>session-20260829-xxx</td></tr></tbody></table>
+<div class="callout note"><span class="co-label">关键点</span><strong>会话是「记忆的外壳」，上下文是「每次请求实际发出去的内容」</strong>。会话负责持久化，上下文负责每一次请求，别把两者搞混。</div>
+<h2 id="sec-window"><span class="h2-num">06 /</span>上下文窗口：一次能「看到」多少</h2>
+<p>模型的输入有上限，这个上限叫<strong>上下文窗口（Context Window）</strong>。Claude 的模型支持 200K 甚至 1M token 的窗口——听起来很大，但代码、日志、历史消息加起来很快就满了。</p>
+<table><thead><tr><th>窗口</th><th>大约相当于</th><th>够做什么</th></tr></thead><tbody><tr><td>200K tokens</td><td>一本 400–600 页的书</td><td>中等项目：读几个文件 + 多轮修改</td></tr><tr><td>1M tokens</td><td>两三本《战争与和平》</td><td>大仓库：整库检索 + 长会话</td></tr></tbody></table>
+<p>上下文里的每个字都要花钱（按 token 计费），而且越长响应越慢。所以 Claude Code 必须精打细算：<strong>尽量少带、必要时压缩</strong>。</p>
+<p>怎么估算 token？粗略规则：中文约 1 字 ≈ 1 token，英文约 4 字符 ≈ 1 token。下面这个模块演示「估算 + 超阈值自动压缩」：</p>
+<figure class="codeblock" data-file="context_manager.py" data-lang="python"><pre class="codebody"><code>"""
+context_manager.py —— token 估算 + 压缩触发（配合第 6 章）
+
+上下文窗口是稀缺资源。代理每轮都要算：现在用了多少 token？
+超过阈值就触发「压缩」（compact）：把旧消息浓缩成摘要，腾出空间。
+
+用法:
+    python context_manager.py
+"""
+from __future__ import annotations
+
+# 粗略估算：中文约 1 字 ≈ 1 token，英文约 4 字符 ≈ 1 token
+def estimate_tokens(text: str) -&gt; int:
+    cjk = sum(1 for ch in text if "\u4e00" &lt;= ch &lt;= "\u9fff")
+    other = len(text) - cjk
+    return cjk + max(1, other // 4)
+
+
+class ContextManager:
+    def __init__(self, window: int = 200_000, compact_ratio: float = 0.8):
+        self.window = window                  # 上下文窗口大小（token）
+        self.ratio = compact_ratio            # 到达窗口 80% 就压缩
+        self.history: list[dict] = []
+
+    @property
+    def usage(self) -&gt; int:
+        return sum(estimate_tokens(m["content"]) for m in self.history)
+
+    @property
+    def should_compact(self) -&gt; bool:
+        return self.usage &gt;= self.window * self.ratio
+
+    def add(self, role: str, content: str) -&gt; None:
+        self.history.append({"role": role, "content": content})
+        if self.should_compact:
+            self.compact()
+
+    def compact(self) -&gt; None:
+        """把最早的一半消息压成一段摘要（真实实现会调用模型生成摘要）。"""
+        old = self.history[: len(self.history) // 2]
+        kept = self.history[len(self.history) // 2 :]
+        digest = "「摘要」" + "；".join(m["content"][:20] for m in old)
+        self.history = [{"role": "system", "content": digest}] + kept
+        print(f"   [压缩] {len(old)} 条旧消息 -&gt; 1 条摘要，当前 {self.usage} tokens")
+
+
+def main() -&gt; None:
+    cm = ContextManager(window=200, compact_ratio=0.6)   # 小窗口，方便演示
+    for i in range(10):
+        cm.add("user", f"第 {i} 条消息：" + "很长的内容" * 10)
+        print(f"写入后 {cm.usage} tokens / 窗口 {cm.window}")
+
+
+if __name__ == "__main__":
+    main()</code></pre></figure>
+<h2 id="sec-compact"><span class="h2-num">06 /</span>快满了怎么办：压缩 Compact</h2>
+<p>当上下文快满时，Claude Code 会触发<strong>压缩（Compact）</strong>：把最早的一部分消息交给模型浓缩成一段摘要，替换掉原文，腾出空间继续干活。</p>
+<ul><li><strong>auto-compact</strong>：达到阈值自动压缩，不用你操心。</li><li><strong>/compact 命令</strong>：手动触发压缩。</li><li><strong>history-snip</strong>：把超长的旧消息截断 / 精简。</li><li><strong>context collapse</strong>：极端情况下把整体浓缩成一句话摘要（细节会丢失）。</li></ul>
+<p>压缩的本质是<strong>用细节换空间</strong>：旧内容变成「还记得做过 X」的摘要，具体细节就没了。这也是为什么超长会话做复杂任务容易「失忆」。拖动下面的滑块感受一下阈值逻辑：</p>
+<div class="demo" id="ctxDemo"><p class="demo-title">拖动滑块，观察上下文占用与压缩触发</p><input type="range" min="10" max="100" value="45" style="width:100%" aria-label="上下文占用"><div class="ctx-bar" style="margin-top:14px"><i></i><span class="thresh" style="left:80%"></span></div><div class="ctx-meta"></div><p class="ctx-info" style="font-size:14px;color:var(--text-2);margin-top:10px"></p></div>
+<div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. 会话（Session）和上下文（Context）的关系是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 完全一样的东西</button><button type="button" data-opt="B">B. 会话负责持久化存储，上下文负责每次请求的内容</button><button type="button" data-opt="C">C. 上下文存在云端</button></div><div class="quiz-feedback"><span class="mark"></span> 会话是「外壳」，把对话存到本地；上下文是每次请求实际发给模型的全部内容。 <a href="#sec-session">回看：会话</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">2. 上下文快满时，auto-compact 会做什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 直接报错停止</button><button type="button" data-opt="B">B. 把旧消息浓缩成摘要腾出空间</button><button type="button" data-opt="C">C. 换更大的模型</button></div><div class="quiz-feedback"><span class="mark"></span> 压缩把早期消息变成摘要，用细节换空间，让对话继续。 <a href="#sec-compact">回看：压缩</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 会话文件存在哪里？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 本地磁盘，换电脑或删目录就没了</button><button type="button" data-opt="B">B. Anthropic 云端</button><button type="button" data-opt="C">C. 浏览器缓存</button></div><div class="quiz-feedback"><span class="mark"></span> 会话序列化存在本地，负责持久化；上下文才是每次请求发出去的内容。 <a href="#sec-session">回看：会话</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>会话把对话持久化到本地，重启后可恢复接着聊。</li><li>上下文窗口是稀缺资源：200K / 1M token，越长越贵越慢。</li><li>快满了就压缩：auto-compact、/compact、history-snip。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+</body>
+</html>
