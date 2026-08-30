@@ -241,6 +241,7 @@ def topbar(prefix, active):
     links = [
         ("index.html", "nav-home", "首页"),
         ("docs/ch01.html", "nav-ch", "章节"),
+        ("docs/ext-ah.html", "nav-ext", "拓展"),
         ("glossary.html", "nav-glossary", "术语表"),
         ("toolbox.html", "nav-toolbox", "代码库"),
         ("about.html", "nav-about", "关于"),
@@ -368,7 +369,11 @@ def build_home():
         "<script>window.__CHAPTERS__="
         + __import__("json").dumps(
             [{"num": c["num"], "title": c["title"], "summary": c["summary"],
-              "keywords": c["keywords"], "path": c["path"]} for c in CHAPTERS],
+              "keywords": c["keywords"], "path": c["path"]} for c in CHAPTERS]
+            + [{"num": "拓", "title": "拓展篇 · Agent 与 Harness",
+                "summary": "把十章串成两个上层概念：Agent 是什么、Harness 怎么把大脑手脚门卫记忆装成整机。",
+                "keywords": "agent harness 代理外壳 子代理 subagent workflow 记忆 memory mcp hooks 多代理 拓展",
+                "path": "docs/ext-ah.html"}],
             ensure_ascii=False)
         + ";</script>"
     )
@@ -385,9 +390,16 @@ def build_home():
         f'<div class="path-steps">{path_steps}</div>'
         '<div class="section-head"><h2>章节索引</h2><span class="en">10 CHAPTERS · 4 PARTS</span></div>'
         f'<div class="chapter-grid">{"".join(cards)}</div>'
+        '<div class="section-head"><h2>拓展阅读</h2><span class="en">EXTENSION · AGENT & HARNESS</span></div>'
+        '<div class="chapter-grid"><a class="ch-card" href="docs/ext-ah.html">'
+        '<span class="cn">拓 · 拓展篇</span>'
+        '<b>Agent 与 Harness（代理外壳）</b>'
+        '<span>把十章内容串成两个上层概念：Agent 是什么、Harness 怎么把「大脑 + 手脚 + 门卫 + 记忆」'
+        '装成整机。附一个可运行的迷你 Harness 代码。</span></a></div>'
         '<div class="callout"><span class="co-label">怎么学效果最好</span>'
         "建议按顺序从第 1 章读到第 10 章：前两章建立整体认知，中间四章是核心机制，"
-        "接着是外围系统，最后两章带你读源码和动手复刻。每章末尾有自测题和可运行的封装代码。</div>"
+        "接着是外围系统，最后两章带你读源码和动手复刻。每章末尾有自测题和可运行的封装代码。"
+        "学完十章后，推荐再看「拓展篇 · Agent 与 Harness」，把概念串成整机。</div>"
         "</div>"
     )
     return page_shell("首页 · 学习目录", "Claude Code 基本原理的自学图解站", body, "index", "", "nav-home", with_sidebar=False)
@@ -416,15 +428,23 @@ GLOSSARY = [
     ("Source Map", "源码映射", "打包产物与原始源码的映射文件，泄露源头就在 cli.js.map。", "ch09", "09", "sec-sourcemap"),
     ("PARITY", "移植对齐", "Rust 移植版与原始行为逐项对齐的清单/思路。", "ch09", "09", "sec-parity"),
     ("Crate", "Rust 包", "Rust 的模块化单元，相当于一个库或可执行程序。", "ch09", "09", "sec-rust"),
+    ("Agent", "代理", "能感知、决策、行动、观察并循环的自主程序，而不是一次性问答。", "ext-ah", "拓", "sec-agent"),
+    ("Harness", "代理外壳", "除了模型本身之外的一切工程代码：循环、工具、权限、上下文、记忆、CLI 等，把模型变成能动手的 Agent。", "ext-ah", "拓", "sec-harness"),
+    ("Workflow", "工作流", "步骤写死的固定流程，与运行时自主决策的 Agent 相对。", "ext-ah", "拓", "sec-agent"),
+    ("Subagent", "子代理", "有独立角色与上下文的小代理，主代理把任务分包给它再回收结果。", "ext-ah", "拓", "sec-subagent"),
+    ("Memory", "记忆", "Harness 给模型配的短期（上下文）与长期（CLAUDE.md、会话文件）记忆。", "ext-ah", "拓", "sec-memory"),
+    ("Hook", "钩子", "在固定时机（如工具调用前后）触发外部脚本的机制，让 Harness 行为可编程。", "ext-ah", "拓", "sec-hooks"),
+    ("MCP", "模型上下文协议", "接入外部工具 / 数据源的标准协议，相当于 Harness 的「万能插口」。", "ext-ah", "拓", "sec-hooks"),
 ]
 
 def build_glossary():
     items = []
     for term, zh, desc, ch_id, num, anchor in GLOSSARY:
+        label = f"第 {num} 章 →" if num.isdigit() else "拓展篇 →"
         items.append(
             '<div class="glossary-term"><div class="gt-head">'
             f"<code>{esc(term)}</code><b>{esc(zh)}</b>"
-            f'<a class="gt-ch" href="docs/{ch_id}.html#{anchor}">第 {num} 章 →</a>'
+            f'<a class="gt-ch" href="docs/{ch_id}.html#{anchor}">{label}</a>'
             f"</div><p>{esc(desc)}</p></div>")
     body = (
         '<div class="hero"><div class="chapter-tag">QUICK REFERENCE</div>'
@@ -465,6 +485,10 @@ def build_toolbox():
          "desc": "本机 Codex 直连桥接服务：让网站的「问 Codex」窗口真正调用本机 Codex CLI（只读沙箱，仅本机流转）。",
          "run": ["python tools\\codex_bridge.py", "powershell -ExecutionPolicy Bypass -File tools\\start_bridge.ps1"],
          "path": ROOT / "tools" / "codex_bridge.py"},
+        {"file": "harness.py", "ch": "ext", "ch_num": "拓", "ch_title": "Agent 与 Harness",
+         "page": "docs/ext-ah.html",
+         "desc": "迷你 Agent Harness：把大脑（模型）+ 手脚（工具）+ 门卫（权限）+ 记忆（会话）串成一个可运行的最小脚手架，正文第 2–8 章一次串起来。",
+         "run": ["python harness.py"]},
     ]
     cards = []
     for m in modules:
@@ -473,7 +497,9 @@ def build_toolbox():
             f'<div class="tool-card" data-ch="{m["ch"]}">'
             '<div class="tc-head">'
             f'<code>{esc(m["file"])}</code>'
-            f'<a class="tc-ch" href="docs/{m["ch"]}.html">第 {m["ch_num"]} 章 · {esc(m["ch_title"])} →</a>'
+            + f'<a class="tc-ch" href="{m.get("page", "docs/" + m["ch"] + ".html")}">'
+            + (f'第 {m["ch_num"]} 章 · ' if str(m["ch_num"]).isdigit() else "拓展篇 · ")
+            + f'{esc(m["ch_title"])} →</a>'
             f'</div><p class="tc-desc">{esc(m["desc"])}</p>'
             f'<div class="runsteps">运行：{run}</div>'
             f'{code_figure(m["file"], "python", path=m.get("path"))}</div>')
@@ -489,6 +515,7 @@ def build_toolbox():
         '<option value="ch04">第 04 章</option><option value="ch05">第 05 章</option>'
         '<option value="ch06">第 06 章</option><option value="ch07">第 07 章</option>'
         '<option value="ch08">第 08 章</option><option value="ch10">第 10 章</option>'
+        '<option value="ext">拓展篇</option>'
         "</select>"
         '<input id="toolFilterText" type="text" placeholder="输入关键词筛选…" aria-label="按关键词筛选">'
         "</div>"
@@ -520,6 +547,7 @@ def build_about():
         "<li>学习进度、深浅主题、字号、阅读位置只保存在本机浏览器 localStorage，不上传。</li>"
         "<li>代码库模块为 Python 3 零依赖实现，复制或下载即可运行。</li>"
         "<li>「问 Codex」窗口通过本机桥接服务调用本机 Codex CLI（只读沙箱），问题与回答仅在本机流转。</li>"
+        "<li>「拓展篇 · Agent 与 Harness」独立于 10 章正文，用于把十章内容串成 Agent / Harness 两个上层概念，并附可运行的迷你 Harness 代码。</li>"
         "</ul>"
         '<h2 id="s4"><span class="h2-num">/</span>致谢</h2>'
         "<p>感谢 ccleaks 的资料整理与 claw-code 的开源移植，为中文自学者提供了难得的学习素材。</p>"
@@ -1020,7 +1048,124 @@ CH10 = {"blocks": [
 
 CHAPTER_CONTENT.update({"ch06": CH06, "ch07": CH07, "ch08": CH08, "ch09": CH09, "ch10": CH10})
 
+# ================= 拓展篇 · Agent 与 Harness =================
+EXT_BLOCKS = [
+    ("h2", "先分清三个词：模型、Agent、Harness", "sec-what"),
+    ("p", "聊 AI 代理时，这三个词最容易被混着用。其实它们是三层东西，各管一段："),
+    ("table", ["维度", "模型 Model", "Agent 代理", "Harness 代理外壳"],
+      [["它是什么", "只会「想」的神经网络", "一套「想 → 做 → 看 → 再想」的循环", "把前两者装成整机的那层工程代码"],
+       ["负责什么", "理解文字、做决策", "决定下一步做什么并反复迭代", "把决策变成真实动作，并保证安全、可恢复、可配置"],
+       ["类比", "大脑", "实习生的工作方式", "工位：电脑、权限卡、资料库、门禁、流程"],
+       ["对应章节", "第 2 章 API 请求", "第 3 章 代理循环", "本篇主题 + 第 4–8 章"]]),
+    ("callout", "tip", "一句话", "模型负责「想」，Agent 负责「循环」，Harness 负责「把想法变成现实」——Claude Code 是三者合体。"),
+    ("h2", "Agent：不是聊天，是一套循环", "sec-agent"),
+    ("p", "判断一个程序是不是「Agent」，不看它用没用大模型，而看它有没有这三个特征："),
+    ("ul", [
+      "**目标驱动**：你给它一个目标，而不是一段话。",
+      "**自主多步**：它自己拆步骤、自己决定下一步，不需要你每一步都指挥。",
+      "**能观察反馈**：每做一步都能看到结果，并根据结果调整。",
+    ]),
+    ("p", "对照第 3 章的循环：感知 → 决策 → 行动 → 观察。聊天机器人不是 Agent（它只有「说」），Claude Code 是 Agent（它真的在做）。"),
+    ("h3", "Agent vs Workflow：自主和固定是两种路线"),
+    ("p", "**Workflow（工作流）**把步骤写死：A 做完做 B，B 做完做 C，像走迷宫前先画好地图。**Agent** 不预设每一步，像边走边看路：遇到岔路自己判断。"),
+    ("table", ["维度", "Workflow 工作流", "Agent 代理"],
+      [["步骤", "预先写死", "运行时自己决定"],
+       ["容错", "步骤出错就卡住", "看到结果可调整"],
+       ["可预测性", "高，结果稳定", "低，结果有随机性"],
+       ["适合场景", "流程固定、规则清楚（如发邮件）", "情况多变、需要临场发挥（如修 bug）"]]),
+    ("callout", "note", "怎么选", "不是 Agent 一定更好：能写死的工作流更省钱、更稳定；变化多的任务才值得上 Agent。Claude Code 里两种都能用（比如用斜杠命令或自定义子代理）。"),
+    ("h2", "Harness：把模型变成「有手有脚」的那层代码", "sec-harness"),
+    ("p", "大模型本身只会输出文字。要让它「真的干活」，外面必须包一层工程代码——这层代码就叫 **Harness（代理外壳）**。它至少负责下面这些事："),
+    ("ul", [
+      "**跑循环**：驱动模型反复「想 → 做 → 看」，直到完成（第 3 章）。",
+      "**管工具**：注册工具、执行工具、把结果送回上下文（第 4 章）。",
+      "**把关安全**：权限模式、YOLO 分级、危险命令拦截（第 5 章）。",
+      "**管上下文**：组装系统提示、管理 token、满了自动压缩（第 2、6 章）。",
+      "**管记忆**：保存 / 恢复会话，读写 CLAUDE.md（第 6 章）。",
+      "**提供界面**：CLI、斜杠命令、配置与开关（第 7、8 章）。",
+    ]),
+    ("callout", "tip", "类比", "模型是**发动机**，Harness 是**整车**：方向盘、刹车、仪表盘、外壳都是车的一部分。只有发动机，车跑不起来。"),
+    ("h2", "从源码看 Harness 的三层结构", "sec-layers"),
+    ("p", "社区在拆解 Claude Code 源码时，常把 Harness 分成三层。这三层正好对应你学过的章节："),
+    ("table", ["层级", "干什么", "对应章节"],
+      [["执行层 Action", "工具注册表、tool_use / tool_result、Bash / Read / Edit / Grep", "第 4 章"],
+       ["上下文层 Context", "系统提示、CLAUDE.md、会话历史、token 预算、compact 压缩", "第 2、6 章"],
+       ["治理层 Governance", "权限模式、YOLO、allowlist / denylist、配置、特性门控、Hooks", "第 5、8 章"]]),
+    ("p", "从下往上看：**执行层**决定它能做什么，**上下文层**决定它看到什么，**治理层**决定什么被允许。三层叠起来，就是一个完整的 Harness。"),
+    ("h2", "记忆：Harness 给模型配的「笔记本」", "sec-memory"),
+    ("p", "模型本身没有记忆——每次请求都要把历史重新发给它（第 2 章说过）。所以「记不记得」这件事，其实是 Harness 在管。它提供两种记忆："),
+    ("table", ["记忆类型", "存在哪", "什么时候用"],
+      [["短期记忆", "上下文窗口内的消息历史", "每一轮请求都带上"],
+       ["项目记忆", "项目根目录的 CLAUDE.md", "每次会话开始自动读入"],
+       ["个人记忆", "~/.claude/CLAUDE.md 等全局文件", "所有项目都会读"],
+       ["长期记忆", "会话文件、设置文件、自定义记忆命令", "断点续聊 / 跨会话复用"]]),
+    ("callout", "note", "大白话", "短期记忆像「这轮对话的草稿纸」，项目记忆像「公司发的项目入职手册」，长期记忆像「你的工作档案」。模型负责看，Harness 负责递。"),
+    ("h2", "子代理与多代理团队：一个人干不完，就组队", "sec-subagent"),
+    ("p", "复杂任务可以拆给多个**子代理（Subagents）**：每个子代理有自己独立的角色设定和上下文，主代理把任务分包出去，再回收结果。这样每个「同事」只记自己那摊事，上下文更省、更专注。"),
+    ("p", "子代理之间怎么配合，有几种常见「团队模式」："),
+    ("table", ["模式", "一句话", "适合场景"],
+      [["Pipeline 流水线", "A 做完交给 B，B 做完交给 C", "步骤有先后依赖"],
+       ["Supervisor 主管", "一个主管拆活、验收、返工", "任务需要统一调度"],
+       ["Fan-out / Fan-in 分头并行", "同时派多个子代理，最后汇总", "几块活互不依赖"],
+       ["Expert Pool 专家池", "按问题类型找对应专家", "领域多样、各有所长"],
+       ["Hierarchical 层级委派", "主管下面还有小主管", "任务规模很大"]]),
+    ("callout", "tip", "记忆点", "主代理 = 项目经理，子代理 = 各司其职的组员，团队模式 = 怎么分工协作。你在终端里看到的多代理流程，本质就是这套。"),
+    ("h2", "Hooks 与 MCP：Harness 的「插槽」", "sec-hooks"),
+    ("p", "一套 Harness 不可能覆盖所有需求，所以它留了两个「插槽」给你扩展："),
+    ("h3", "Hooks：到点就响的「闹钟 + 哨兵」"),
+    ("p", "**Hook（钩子）**是在固定时机触发外部脚本的机制，比如：工具调用前（PreToolUse）、工具调用后（PostToolUse）、任务结束时（Stop）。你可以用它做「每次改文件前自动备份」「每次跑命令前记录日志」这类事情。"),
+    ("h3", "MCP：万能「USB 口」"),
+    ("p", "**MCP（Model Context Protocol）**是接入外部工具和数据源的标准协议：数据库、浏览器、内部 API，接上就能用。它让 Harness 的工具系统不再局限于内置的那几个。"),
+    ("table", ["维度", "Hooks", "MCP"],
+      [["改变什么", "改变 Harness 在某个时机的行为", "给 Harness 增加新能力"],
+       ["触发方式", "事件驱动（时机到了就触发）", "按需调用（模型决定用不用）"],
+       ["类比", "闹钟 + 门卫哨", "万能 USB 口"]]),
+    ("h2", "代码实验室：一个迷你 Harness", "sec-lab"),
+    ("p", "把上面所有概念浓缩成一个能跑的小程序 `harness.py`：大脑（假模型）+ 手脚（工具）+ 门卫（权限）+ 记忆（会话），由一个 Harness 串起来。跑一遍，你就把第 2–8 章串起来了。"),
+    ("code", "harness.py", "python", None),
+    ("steps", [
+      ("保存文件", "把上面的 `harness.py` 保存到任意目录。"),
+      ("运行", "在终端执行 `python harness.py`。"),
+      ("观察输出", "会看到：读文件 → 统计行数 → 危险命令被门卫拦截 → 模型收尾 → 会话存盘。"),
+    ]),
+    ("callout", "tip", "换成真实模型", "想换成真实模型？看 `harness.py` 里 `FakeModel.think` 下方的注释：把假模型换成一次真实 API 调用即可，循环、门卫、记忆都不用改——这正是 Harness 的意义：换大脑，不动外壳。"),
+    ("quiz", [
+      {"q": "模型、Agent、Harness 三者的关系，哪个说法对？", "opts": [("A", "模型会动手，Agent 负责想，Harness 是界面"), ("B", "模型负责想，Agent 负责循环，Harness 把前两者装成能安全干活的整机"), ("C", "三者是一回事")], "ans": "B",
+       "explain": "模型只会输出文字；Agent 是循环；Harness 是包含工具、权限、记忆、界面的一切工程代码。", "back": ("先分清三个词", "sec-what")},
+      {"q": "Workflow 和 Agent 的本质区别是？", "opts": [("A", "Workflow 步骤写死，Agent 运行时自主决策"), ("B", "Workflow 更智能"), ("C", "Agent 不需要模型")], "ans": "A",
+       "explain": "Workflow 走固定流程，Agent 边走边看、根据反馈调整。", "back": ("Agent vs Workflow", "sec-agent")},
+      {"q": "Harness 的「上下文层」主要负责什么？", "opts": [("A", "组装系统提示、CLAUDE.md、历史，管理 token 与压缩"), ("B", "执行工具调用"), ("C", "决定权限放不放行")], "ans": "A",
+       "explain": "执行层管工具、治理层管权限、上下文层管「它看到什么」。", "back": ("三层结构", "sec-layers")},
+      {"q": "子代理（Subagent）最大的好处是？", "opts": [("A", "每个子代理有独立上下文，更专注、更省"), ("B", "可以让模型跑得更快"), ("C", "不需要主代理")], "ans": "A",
+       "explain": "子代理各自记各自的事，上下文更小更专注，主代理负责调度汇总。", "back": ("子代理", "sec-subagent")},
+      {"q": "Hooks 和 MCP 的区别是？", "opts": [("A", "Hooks 在固定时机触发脚本，MCP 接入外部工具 / 数据源"), ("B", "它们完全一样"), ("C", "MCP 只能读文件")], "ans": "A",
+       "explain": "Hooks 改行为（时机触发），MCP 加能力（按需调用外部服务）。", "back": ("Hooks 与 MCP", "sec-hooks")},
+    ]),
+    ("summary", [
+      "模型负责想，Agent 负责循环，Harness 负责把想法变成真实动作并保证安全。",
+      "Workflow 走固定流程，Agent 自主决策；能写死的用工作流，变化多的用 Agent。",
+      "Harness 三层：执行层（工具）、上下文层（看到什么）、治理层（允许什么）。",
+      "记忆分短期（上下文）与长期（CLAUDE.md、会话文件），都由 Harness 管。",
+      "子代理 = 专人专岗，团队模式 = 分工协作；Hooks = 时机插槽，MCP = 万能接口。",
+    ]),
+]
+
 # ================= 构建入口 =================
+def build_ext():
+    hero = (
+        '<div class="hero"><span class="watermark">拓</span>'
+        '<div class="chapter-tag">EXTENSION · PART 5 · AGENT & HARNESS</div>'
+        "<h1>拓展篇 · Agent 与 Harness</h1>"
+        '<p class="goal">正文十章把 Claude Code 拆开讲；这一篇把它们再装回去：Agent 是什么、'
+        "Harness（代理外壳）又是什么。读完你会有一种「哦，原来整台机器是这样拼起来的」的感觉。</p></div>"
+    )
+    body = hero + render_blocks(EXT_BLOCKS, "拓")
+    body += '<div class="prevnext" id="prevNext"></div>'
+    return page_shell(
+        "拓展篇 · Agent 与 Harness",
+        "Agent 与 Harness（代理外壳）拓展阅读",
+        body, "ext-ah", "../", "nav-ext")
+
 def render_chapter(ch):
     part = next(p for p in PARTS if p["n"] == ch["part"])
     hero = (
@@ -1055,7 +1200,8 @@ def main():
     (ROOT / "toolbox.html").write_text(build_toolbox(), encoding="utf-8")
     (ROOT / "about.html").write_text(build_about(), encoding="utf-8")
     build_docs()
-    print("OK: 已生成 index / glossary / toolbox / about 与 docs/ch01..ch10")
+    (ROOT / "docs" / "ext-ah.html").write_text(build_ext(), encoding="utf-8")
+    print("OK: 已生成 index / glossary / toolbox / about、docs/ch01..ch10 与 docs/ext-ah.html")
 
 if __name__ == "__main__":
     main()

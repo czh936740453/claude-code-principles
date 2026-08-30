@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拓展篇 · Agent 与 Harness — Claude Code 原理图解</title>
+<meta name="description" content="Agent 与 Harness（代理外壳）拓展阅读">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ext-ah">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch" href="../docs/ch01.html">章节</a><a class="nav-ext active" href="../docs/ext-ah.html">拓展</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">拓</span><div class="chapter-tag">EXTENSION · PART 5 · AGENT & HARNESS</div><h1>拓展篇 · Agent 与 Harness</h1><p class="goal">正文十章把 Claude Code 拆开讲；这一篇把它们再装回去：Agent 是什么、Harness（代理外壳）又是什么。读完你会有一种「哦，原来整台机器是这样拼起来的」的感觉。</p></div><h2 id="sec-what"><span class="h2-num">拓 /</span>先分清三个词：模型、Agent、Harness</h2>
+<p>聊 AI 代理时，这三个词最容易被混着用。其实它们是三层东西，各管一段：</p>
+<table><thead><tr><th>维度</th><th>模型 Model</th><th>Agent 代理</th><th>Harness 代理外壳</th></tr></thead><tbody><tr><td>它是什么</td><td>只会「想」的神经网络</td><td>一套「想 → 做 → 看 → 再想」的循环</td><td>把前两者装成整机的那层工程代码</td></tr><tr><td>负责什么</td><td>理解文字、做决策</td><td>决定下一步做什么并反复迭代</td><td>把决策变成真实动作，并保证安全、可恢复、可配置</td></tr><tr><td>类比</td><td>大脑</td><td>实习生的工作方式</td><td>工位：电脑、权限卡、资料库、门禁、流程</td></tr><tr><td>对应章节</td><td>第 2 章 API 请求</td><td>第 3 章 代理循环</td><td>本篇主题 + 第 4–8 章</td></tr></tbody></table>
+<div class="callout tip"><span class="co-label">一句话</span>模型负责「想」，Agent 负责「循环」，Harness 负责「把想法变成现实」——Claude Code 是三者合体。</div>
+<h2 id="sec-agent"><span class="h2-num">拓 /</span>Agent：不是聊天，是一套循环</h2>
+<p>判断一个程序是不是「Agent」，不看它用没用大模型，而看它有没有这三个特征：</p>
+<ul><li><strong>目标驱动</strong>：你给它一个目标，而不是一段话。</li><li><strong>自主多步</strong>：它自己拆步骤、自己决定下一步，不需要你每一步都指挥。</li><li><strong>能观察反馈</strong>：每做一步都能看到结果，并根据结果调整。</li></ul>
+<p>对照第 3 章的循环：感知 → 决策 → 行动 → 观察。聊天机器人不是 Agent（它只有「说」），Claude Code 是 Agent（它真的在做）。</p>
+<h3 id="h1">Agent vs Workflow：自主和固定是两种路线</h3>
+<p><strong>Workflow（工作流）</strong>把步骤写死：A 做完做 B，B 做完做 C，像走迷宫前先画好地图。<strong>Agent</strong> 不预设每一步，像边走边看路：遇到岔路自己判断。</p>
+<table><thead><tr><th>维度</th><th>Workflow 工作流</th><th>Agent 代理</th></tr></thead><tbody><tr><td>步骤</td><td>预先写死</td><td>运行时自己决定</td></tr><tr><td>容错</td><td>步骤出错就卡住</td><td>看到结果可调整</td></tr><tr><td>可预测性</td><td>高，结果稳定</td><td>低，结果有随机性</td></tr><tr><td>适合场景</td><td>流程固定、规则清楚（如发邮件）</td><td>情况多变、需要临场发挥（如修 bug）</td></tr></tbody></table>
+<div class="callout note"><span class="co-label">怎么选</span>不是 Agent 一定更好：能写死的工作流更省钱、更稳定；变化多的任务才值得上 Agent。Claude Code 里两种都能用（比如用斜杠命令或自定义子代理）。</div>
+<h2 id="sec-harness"><span class="h2-num">拓 /</span>Harness：把模型变成「有手有脚」的那层代码</h2>
+<p>大模型本身只会输出文字。要让它「真的干活」，外面必须包一层工程代码——这层代码就叫 <strong>Harness（代理外壳）</strong>。它至少负责下面这些事：</p>
+<ul><li><strong>跑循环</strong>：驱动模型反复「想 → 做 → 看」，直到完成（第 3 章）。</li><li><strong>管工具</strong>：注册工具、执行工具、把结果送回上下文（第 4 章）。</li><li><strong>把关安全</strong>：权限模式、YOLO 分级、危险命令拦截（第 5 章）。</li><li><strong>管上下文</strong>：组装系统提示、管理 token、满了自动压缩（第 2、6 章）。</li><li><strong>管记忆</strong>：保存 / 恢复会话，读写 CLAUDE.md（第 6 章）。</li><li><strong>提供界面</strong>：CLI、斜杠命令、配置与开关（第 7、8 章）。</li></ul>
+<div class="callout tip"><span class="co-label">类比</span>模型是<strong>发动机</strong>，Harness 是<strong>整车</strong>：方向盘、刹车、仪表盘、外壳都是车的一部分。只有发动机，车跑不起来。</div>
+<h2 id="sec-layers"><span class="h2-num">拓 /</span>从源码看 Harness 的三层结构</h2>
+<p>社区在拆解 Claude Code 源码时，常把 Harness 分成三层。这三层正好对应你学过的章节：</p>
+<table><thead><tr><th>层级</th><th>干什么</th><th>对应章节</th></tr></thead><tbody><tr><td>执行层 Action</td><td>工具注册表、tool_use / tool_result、Bash / Read / Edit / Grep</td><td>第 4 章</td></tr><tr><td>上下文层 Context</td><td>系统提示、CLAUDE.md、会话历史、token 预算、compact 压缩</td><td>第 2、6 章</td></tr><tr><td>治理层 Governance</td><td>权限模式、YOLO、allowlist / denylist、配置、特性门控、Hooks</td><td>第 5、8 章</td></tr></tbody></table>
+<p>从下往上看：<strong>执行层</strong>决定它能做什么，<strong>上下文层</strong>决定它看到什么，<strong>治理层</strong>决定什么被允许。三层叠起来，就是一个完整的 Harness。</p>
+<h2 id="sec-memory"><span class="h2-num">拓 /</span>记忆：Harness 给模型配的「笔记本」</h2>
+<p>模型本身没有记忆——每次请求都要把历史重新发给它（第 2 章说过）。所以「记不记得」这件事，其实是 Harness 在管。它提供两种记忆：</p>
+<table><thead><tr><th>记忆类型</th><th>存在哪</th><th>什么时候用</th></tr></thead><tbody><tr><td>短期记忆</td><td>上下文窗口内的消息历史</td><td>每一轮请求都带上</td></tr><tr><td>项目记忆</td><td>项目根目录的 CLAUDE.md</td><td>每次会话开始自动读入</td></tr><tr><td>个人记忆</td><td>~/.claude/CLAUDE.md 等全局文件</td><td>所有项目都会读</td></tr><tr><td>长期记忆</td><td>会话文件、设置文件、自定义记忆命令</td><td>断点续聊 / 跨会话复用</td></tr></tbody></table>
+<div class="callout note"><span class="co-label">大白话</span>短期记忆像「这轮对话的草稿纸」，项目记忆像「公司发的项目入职手册」，长期记忆像「你的工作档案」。模型负责看，Harness 负责递。</div>
+<h2 id="sec-subagent"><span class="h2-num">拓 /</span>子代理与多代理团队：一个人干不完，就组队</h2>
+<p>复杂任务可以拆给多个<strong>子代理（Subagents）</strong>：每个子代理有自己独立的角色设定和上下文，主代理把任务分包出去，再回收结果。这样每个「同事」只记自己那摊事，上下文更省、更专注。</p>
+<p>子代理之间怎么配合，有几种常见「团队模式」：</p>
+<table><thead><tr><th>模式</th><th>一句话</th><th>适合场景</th></tr></thead><tbody><tr><td>Pipeline 流水线</td><td>A 做完交给 B，B 做完交给 C</td><td>步骤有先后依赖</td></tr><tr><td>Supervisor 主管</td><td>一个主管拆活、验收、返工</td><td>任务需要统一调度</td></tr><tr><td>Fan-out / Fan-in 分头并行</td><td>同时派多个子代理，最后汇总</td><td>几块活互不依赖</td></tr><tr><td>Expert Pool 专家池</td><td>按问题类型找对应专家</td><td>领域多样、各有所长</td></tr><tr><td>Hierarchical 层级委派</td><td>主管下面还有小主管</td><td>任务规模很大</td></tr></tbody></table>
+<div class="callout tip"><span class="co-label">记忆点</span>主代理 = 项目经理，子代理 = 各司其职的组员，团队模式 = 怎么分工协作。你在终端里看到的多代理流程，本质就是这套。</div>
+<h2 id="sec-hooks"><span class="h2-num">拓 /</span>Hooks 与 MCP：Harness 的「插槽」</h2>
+<p>一套 Harness 不可能覆盖所有需求，所以它留了两个「插槽」给你扩展：</p>
+<h3 id="h2">Hooks：到点就响的「闹钟 + 哨兵」</h3>
+<p><strong>Hook（钩子）</strong>是在固定时机触发外部脚本的机制，比如：工具调用前（PreToolUse）、工具调用后（PostToolUse）、任务结束时（Stop）。你可以用它做「每次改文件前自动备份」「每次跑命令前记录日志」这类事情。</p>
+<h3 id="h3">MCP：万能「USB 口」</h3>
+<p><strong>MCP（Model Context Protocol）</strong>是接入外部工具和数据源的标准协议：数据库、浏览器、内部 API，接上就能用。它让 Harness 的工具系统不再局限于内置的那几个。</p>
+<table><thead><tr><th>维度</th><th>Hooks</th><th>MCP</th></tr></thead><tbody><tr><td>改变什么</td><td>改变 Harness 在某个时机的行为</td><td>给 Harness 增加新能力</td></tr><tr><td>触发方式</td><td>事件驱动（时机到了就触发）</td><td>按需调用（模型决定用不用）</td></tr><tr><td>类比</td><td>闹钟 + 门卫哨</td><td>万能 USB 口</td></tr></tbody></table>
+<h2 id="sec-lab"><span class="h2-num">拓 /</span>代码实验室：一个迷你 Harness</h2>
+<p>把上面所有概念浓缩成一个能跑的小程序 <code>harness.py</code>：大脑（假模型）+ 手脚（工具）+ 门卫（权限）+ 记忆（会话），由一个 Harness 串起来。跑一遍，你就把第 2–8 章串起来了。</p>
+<figure class="codeblock" data-file="harness.py" data-lang="python"><pre class="codebody"><code># -*- coding: utf-8 -*-
+"""
+harness.py —— 最小 Agent Harness（代理外壳）演示
+=================================================
+
+一句话：Harness = 把「大脑 + 手脚 + 门卫 + 记忆」串起来的那层工程代码。
+
+    大脑   = 模型（Model）     只会「想」，不会动手
+    手脚   = 工具（Tools）     读文件、跑命令、改代码
+    门卫   = 权限（Permissions）决定哪一步允许执行
+    记忆   = 会话（Memory）    记录说过什么、做过什么
+
+真正的 Claude Code 就是一个这样的 Harness：模型负责决策，
+Harness 负责把决策变成真实世界里的动作，并保证安全。
+正文 10 章讲的循环、工具、权限、会话、CLI……在这里全部串起来了。
+
+运行：  python harness.py
+"""
+import json
+
+# ---------- 1. 大脑：模型（这里用假模型模拟，可换成真实 API） ----------
+class FakeModel:
+    """假模型：看着「记忆（上下文）」假装思考，返回下一步动作。"""
+
+    def __init__(self):
+        self.turn = 0  # 第几次被调用
+
+    def think(self, memory):
+        """输入：到目前为止的全部消息（上下文）。
+        输出：一个「动作」——要么调用工具（tool_use），要么直接说答案（text）。"""
+        self.turn += 1
+        if self.turn == 1:
+            # 第一步：决定先读文件
+            return {"type": "tool_use", "name": "read_file", "input": {"path": "notes.txt"}}
+        if self.turn == 2:
+            # 第二步：看到文件内容后，决定统计行数
+            return {"type": "tool_use", "name": "bash", "input": {"command": "统计行数"}}
+        if self.turn == 3:
+            # 第三步：想删掉临时文件 —— 这条会被「门卫」拦下来
+            return {"type": "tool_use", "name": "bash", "input": {"command": "rm -rf /tmp"}}
+        # 第四步：觉得任务完成了，直接输出文字，循环结束
+        return {"type": "text", "text": "搞定了：文件已读完、行数已统计，危险命令被门卫拦下。"}
+
+    # 换成真实模型（示意，未在此运行）：
+    # def think(self, memory):
+    #     resp = anthropic_client.messages.create(
+    #         model="claude-sonnet-4-5",
+    #         system="你是 Claude Code，一个高效的编程代理。",
+    #         messages=memory.messages,       # 把记忆原样发给 API
+    #         tools=tools.schemas(),          # 告诉模型有哪些工具可用
+    #     )
+    #     return parse_response(resp)          # 解析成 tool_use / text
+
+# ---------- 2. 手脚：工具注册表 + 执行 ----------
+class Tools:
+    """工具 = 名字 + 说明 + 函数。模型只能调用登记过的工具。"""
+
+    def __init__(self):
+        self.registry = {
+            "read_file": {"desc": "读取文件内容", "fn": self.read_file},
+            "bash": {"desc": "执行 shell 命令", "fn": self.bash},
+        }
+
+    def schemas(self):
+        """给模型看的「工具说明书」（简化版 JSON Schema）。"""
+        return [{"name": n, "description": v["desc"]} for n, v in self.registry.items()]
+
+    @staticmethod
+    def read_file(path):
+        # 真实实现是读磁盘；这里为了演示直接返回一段内容
+        return "笔记内容：\n- 买牛奶\n- 写周报\n- 学 Claude Code"
+
+    @staticmethod
+    def bash(command):
+        # 真实实现会用 subprocess 执行命令；这里是「模拟 shell」只认识几个命令
+        if command == "统计行数":
+            return "3"
+        return f"（模拟 shell）未知命令：{command}"
+
+    def run(self, name, payload):
+        tool = self.registry.get(name)
+        if not tool:
+            return f"错误：没有名为 {name} 的工具"
+        return tool["fn"](**payload)
+
+# ---------- 3. 门卫：权限检查（YOLO 分级的超简版） ----------
+class Guard:
+    """在工具真正执行之前把关：危险命令直接拒绝。"""
+
+    DANGEROUS = ["rm -rf", "format", "del /f", "shutdown"]
+
+    def check(self, name, payload):
+        """返回 (是否放行, 理由)。"""
+        if name != "bash":
+            return True, "读取 / 修改文件属于常规操作，放行"
+        cmd = (payload.get("command") or "").lower()
+        for bad in self.DANGEROUS:
+            if bad in cmd:
+                return False, f"命令包含危险模式「{bad}」，拒绝执行"
+        return True, "命令无危险，放行"
+
+# ---------- 4. 记忆：会话（短期历史 + 存盘恢复） ----------
+class Memory:
+    """把「说过什么、做过什么」记下来，这就是模型的上下文。"""
+
+    def __init__(self):
+        self.messages = []  # 每条消息：{"role": ..., "content": ...}
+
+    def add(self, role, content):
+        self.messages.append({"role": role, "content": content})
+
+    def save(self, path="session.json"):
+        """把记忆序列化存盘（对应「会话文件」）。"""
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.messages, f, ensure_ascii=False, indent=2)
+
+    def load(self, path="session.json"):
+        """从磁盘恢复记忆（对应「断点续聊」）。"""
+        try:
+            with open(path, encoding="utf-8") as f:
+                self.messages = json.load(f)
+            print(f"[记忆] 已恢复会话：{len(self.messages)} 条消息")
+        except FileNotFoundError:
+            print("[记忆] 没有旧会话，从零开始")
+
+# ---------- 5. Harness：把上面四块装成整机 ----------
+class Harness:
+    """代理外壳本身：负责跑循环、接工具、过门卫、写记忆。"""
+
+    def __init__(self):
+        self.model = FakeModel()
+        self.tools = Tools()
+        self.guard = Guard()
+        self.memory = Memory()
+        self.max_turns = 6  # 防止死循环：最多转几圈
+
+    def run(self, task):
+        print(f"[用户] {task}\n")
+        self.memory.add("user", task)
+        for turn in range(1, self.max_turns + 1):
+            action = self.model.think(self.memory)
+            if action["type"] == "text":
+                print(f"[输出] {action['text']}")
+                break
+            # 行动前先过门卫
+            allowed, reason = self.guard.check(action["name"], action["input"])
+            print(f"[决策] 想调用工具 {action['name']}：{action['input']}")
+            print(f"[门卫] {reason}")
+            if not allowed:
+                print("[行动] （未执行）已被权限拦截\n")
+                self.memory.add("tool_result", "权限拒绝：" + reason)
+                continue
+            result = self.tools.run(action["name"], action["input"])
+            print(f"[行动] {action['name']} -&gt; {result}\n")
+            self.memory.add("tool_result", result)
+        else:
+            print("[警告] 达到最大轮数仍未完成，强制停止（终止条件！）")
+        self.memory.save()
+        print(f"[记忆] 会话已存盘，共 {len(self.messages)} 条消息 → 下次可恢复")
+
+    @property
+    def messages(self):
+        return self.memory.messages
+
+
+if __name__ == "__main__":
+    Harness().run("帮我看看 notes.txt，统计行数，并清理临时文件")
+</code></pre></figure>
+<ol class="steps"><li><b>保存文件</b>把上面的 <code>harness.py</code> 保存到任意目录。</li><li><b>运行</b>在终端执行 <code>python harness.py</code>。</li><li><b>观察输出</b>会看到：读文件 → 统计行数 → 危险命令被门卫拦截 → 模型收尾 → 会话存盘。</li></ol>
+<div class="callout tip"><span class="co-label">换成真实模型</span>想换成真实模型？看 <code>harness.py</code> 里 <code>FakeModel.think</code> 下方的注释：把假模型换成一次真实 API 调用即可，循环、门卫、记忆都不用改——这正是 Harness 的意义：换大脑，不动外壳。</div>
+<div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. 模型、Agent、Harness 三者的关系，哪个说法对？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 模型会动手，Agent 负责想，Harness 是界面</button><button type="button" data-opt="B">B. 模型负责想，Agent 负责循环，Harness 把前两者装成能安全干活的整机</button><button type="button" data-opt="C">C. 三者是一回事</button></div><div class="quiz-feedback"><span class="mark"></span> 模型只会输出文字；Agent 是循环；Harness 是包含工具、权限、记忆、界面的一切工程代码。 <a href="#sec-what">回看：先分清三个词</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">2. Workflow 和 Agent 的本质区别是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. Workflow 步骤写死，Agent 运行时自主决策</button><button type="button" data-opt="B">B. Workflow 更智能</button><button type="button" data-opt="C">C. Agent 不需要模型</button></div><div class="quiz-feedback"><span class="mark"></span> Workflow 走固定流程，Agent 边走边看、根据反馈调整。 <a href="#sec-agent">回看：Agent vs Workflow</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. Harness 的「上下文层」主要负责什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 组装系统提示、CLAUDE.md、历史，管理 token 与压缩</button><button type="button" data-opt="B">B. 执行工具调用</button><button type="button" data-opt="C">C. 决定权限放不放行</button></div><div class="quiz-feedback"><span class="mark"></span> 执行层管工具、治理层管权限、上下文层管「它看到什么」。 <a href="#sec-layers">回看：三层结构</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">4. 子代理（Subagent）最大的好处是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 每个子代理有独立上下文，更专注、更省</button><button type="button" data-opt="B">B. 可以让模型跑得更快</button><button type="button" data-opt="C">C. 不需要主代理</button></div><div class="quiz-feedback"><span class="mark"></span> 子代理各自记各自的事，上下文更小更专注，主代理负责调度汇总。 <a href="#sec-subagent">回看：子代理</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">5. Hooks 和 MCP 的区别是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. Hooks 在固定时机触发脚本，MCP 接入外部工具 / 数据源</button><button type="button" data-opt="B">B. 它们完全一样</button><button type="button" data-opt="C">C. MCP 只能读文件</button></div><div class="quiz-feedback"><span class="mark"></span> Hooks 改行为（时机触发），MCP 加能力（按需调用外部服务）。 <a href="#sec-hooks">回看：Hooks 与 MCP</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>模型负责想，Agent 负责循环，Harness 负责把想法变成真实动作并保证安全。</li><li>Workflow 走固定流程，Agent 自主决策；能写死的用工作流，变化多的用 Agent。</li><li>Harness 三层：执行层（工具）、上下文层（看到什么）、治理层（允许什么）。</li><li>记忆分短期（上下文）与长期（CLAUDE.md、会话文件），都由 Harness 管。</li><li>子代理 = 专人专岗，团队模式 = 分工协作；Hooks = 时机插槽，MCP = 万能接口。</li></ul></div><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+<button id="codexFab" class="codex-fab" type="button" aria-label="问 Codex"><span class="fab-ico">&gt;_</span><span class="fab-txt">问 Codex</span></button>
+<aside id="codexChat" class="codex-chat" role="dialog" aria-label="问 Codex 直连窗口"><div class="codex-head"><b>&gt;_ Codex</b><span id="codexStatus" class="codex-status connecting">连接中…</span><button id="codexClose" type="button" aria-label="关闭">×</button></div><div id="codexMessages" class="codex-msgs"></div><div id="codexChips" class="codex-chips"><button type="button">代理循环是怎么转起来的？</button><button type="button">tool_use 是什么？</button><button type="button">YOLO 权限怎么分级？</button><button type="button">上下文被占满会怎样？</button></div><div class="codex-input"><textarea id="codexInput" rows="1" placeholder="向本机 Codex 提问…（只读沙箱）"></textarea><button id="codexSend" type="button">发送</button></div></aside>
+<script src="../assets/js/codex-chat.js"></script>
+</body>
+</html>

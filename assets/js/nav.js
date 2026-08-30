@@ -85,11 +85,14 @@
     return null;
   }
 
-  /* 页面相对路径：章节页位于 docs/ 子目录，链接需加 ../ 前缀；
+  /* 页面相对路径：章节页 / 拓展页位于 docs/ 子目录，链接需加 ../ 前缀；
      根级页面（首页/术语表/代码库/关于）直接用相对路径。 */
-  function pageHref(ch) {
+  function isDocsPage() {
     var page = getPage();
-    var prefix = page.indexOf("ch") === 0 ? "../" : "";
+    return page.indexOf("ch") === 0 || page.indexOf("ext") === 0;
+  }
+  function pageHref(ch) {
+    var prefix = isDocsPage() ? "../" : "";
     return prefix + ch.path;
   }
 
@@ -203,8 +206,13 @@
       }
     }
 
+    /* 拓展篇（独立于 10 章进度） */
+    var extActive = getPage() === "ext-ah" ? " active" : "";
+    html += '<a class="ch' + extActive + '" href="' + (isDocsPage() ? "../" : "") + 'docs/ext-ah.html">' +
+      '<span class="num">拓</span><span>Agent 与 Harness（拓展篇）</span></a>';
+
     /* 本页小节（滚动高亮用） */
-    if (cur) {
+    if (cur || isDocsPage()) {
       var secs = [];
       var hs = document.querySelectorAll(".content h2[id], .content h3[id]");
       for (var h = 0; h < hs.length; h++) secs.push(hs[h]);
@@ -266,7 +274,13 @@
   function initPrevNext() {
     var box = document.getElementById("prevNext");
     var cur = curChapter();
-    if (!box || !cur) return;
+    if (!box) return;
+    if (!cur && isDocsPage()) {
+      box.innerHTML = '<a href="../index.html"><span class="dir">← 返回首页</span><b>学习目录</b></a>' +
+        '<a href="../toolbox.html"><span class="dir">去动手 →</span><b>代码库 · 迷你 Harness</b></a>';
+      return;
+    }
+    if (!cur) return;
     var i = parseInt(cur.num, 10) - 1;
     var prev = i > 0 ? CHAPTERS[i - 1] : null;
     var next = i < CHAPTERS.length - 1 ? CHAPTERS[i + 1] : null;
@@ -282,8 +296,8 @@
 
   /* ---------- 阅读位置记忆 ---------- */
   function initReadingPos() {
+    if (!isDocsPage()) return;
     var page = getPage();
-    if (page.indexOf("ch") !== 0) return;
     var key = K.pos + page;
     var saved = parseInt(lsGet(key, "0"), 10) || 0;
     if (location.hash) {
