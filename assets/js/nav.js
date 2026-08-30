@@ -85,6 +85,14 @@
     return null;
   }
 
+  /* 页面相对路径：章节页位于 docs/ 子目录，链接需加 ../ 前缀；
+     根级页面（首页/术语表/代码库/关于）直接用相对路径。 */
+  function pageHref(ch) {
+    var page = getPage();
+    var prefix = page.indexOf("ch") === 0 ? "../" : "";
+    return prefix + ch.path;
+  }
+
   /* ---------- 主题 ---------- */
   function applyTheme(t) { document.documentElement.setAttribute("data-theme", t); }
   function paintThemeBtn() {
@@ -188,7 +196,7 @@
         if (ch.part !== PARTS[p].n) continue;
         var active = cur && cur.id === ch.id ? " active" : "";
         var done = getCompleted().indexOf(ch.id) !== -1 ? " done" : "";
-        html += '<a class="ch' + active + '" href="' + ch.path + '">' +
+        html += '<a class="ch' + active + '" href="' + pageHref(ch) + '">' +
           '<span class="num">' + ch.num + "</span>" +
           "<span>" + ch.title + "</span>" +
           '<span class="tick' + done + '" data-tick="' + ch.id + '"></span></a>';
@@ -264,10 +272,10 @@
     var next = i < CHAPTERS.length - 1 ? CHAPTERS[i + 1] : null;
     var html = "";
     html += prev
-      ? '<a href="' + prev.path + '"><span class="dir">\u2190 上一章</span><b>' + prev.num + " · " + prev.title + "</b></a>"
+      ? '<a href="' + pageHref(prev) + '"><span class="dir">\u2190 上一章</span><b>' + prev.num + " · " + prev.title + "</b></a>"
       : '<a href="../index.html"><span class="dir">\u2190 返回首页</span><b>学习目录</b></a>';
     html += next
-      ? '<a href="' + next.path + '"><span class="dir">下一章 \u2192</span><b>' + next.num + " · " + next.title + "</b></a>"
+      ? '<a href="' + pageHref(next) + '"><span class="dir">下一章 \u2192</span><b>' + next.num + " · " + next.title + "</b></a>"
       : '<a href="../toolbox.html"><span class="dir">全部学完 \u2192</span><b>去代码库动手</b></a>';
     box.innerHTML = html;
   }
