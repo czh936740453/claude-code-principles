@@ -20,8 +20,6 @@
   var startX = 0, startY = 0, baseRx = 0, baseRy = 0;
   var downFace = null;
   var resumeTimer = null;
-  var reduceMotion = window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* 从 CSS 变量读取当前尺寸（响应式：手机端更小） */
   function dims() {
@@ -107,7 +105,8 @@
     if (resumeTimer) clearTimeout(resumeTimer);
   }
   function resumeSpin() {
-    if (reduceMotion) return;
+    /* 无论系统是否偏好减少动效，交互结束后都恢复自动旋转；
+       减动画效的用户由 CSS 用更慢的速度呈现（见 style.css）。 */
     if (resumeTimer) clearTimeout(resumeTimer);
     resumeTimer = setTimeout(function () {
       spin.classList.remove("paused");
@@ -131,7 +130,7 @@
     var dx = e.clientX - startX, dy = e.clientY - startY;
     if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
     ry = baseRy + dx * 0.35;
-    rx = Math.max(-75, Math.min(75, baseRy - dy * 0.35));
+    rx = Math.max(-75, Math.min(75, baseRx - dy * 0.35));
     update();
   });
   function endDrag(e) {
@@ -181,6 +180,6 @@
     resizeTimer = setTimeout(function () { resizeTimer = null; layout(); }, 120);
   });
 
-  if (!reduceMotion) spin.classList.add("auto");
+  spin.classList.add("auto");
   build(); layout(); paint(); update();
 })();

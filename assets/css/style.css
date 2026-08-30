@@ -687,6 +687,12 @@ html[data-font="2"] .content-inner { max-width: 800px; }
 .poly-spin.auto { animation: poly-spin 80s linear infinite; }
 .poly-spin.paused { animation-play-state: paused; }
 @keyframes poly-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+/* 偏好减少动效：多面体仍保持自动旋转，但放慢 3 倍（覆盖全局 animation:none） */
+@media (prefers-reduced-motion: reduce) {
+  .poly-spin.auto { animation: poly-spin 240s linear infinite !important; }
+  .poly-spin.paused { animation-play-state: paused !important; }
+}
+
 
 .poly { position: relative; transform-style: preserve-3d; }
 .poly-face {
