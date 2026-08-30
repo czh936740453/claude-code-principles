@@ -24,6 +24,40 @@
 <ul><li><strong>LOW</strong>（如读文件）→ 直接放行，不打扰你。</li><li><strong>MEDIUM</strong>（如改文件）→ 弹窗问你一句。</li><li><strong>HIGH</strong>（如 <code>rm -rf</code>）→ 拒绝或强烈确认。</li></ul>
 <p>下面这个交互演示，带你走一遍完整决策流程：</p>
 <div class="demo" id="treeDemo"><p class="demo-title">走一遍权限决策流程（点击分支）</p><div class="tree-root"></div><div class="demo-ctrl"><button class="btn btn-reset">重新开始</button><span class="status"></span></div></div>
+<div class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 400" role="img" aria-label="权限决策流程">
+<defs><marker id="ap" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<rect class="dg-node" x="280" y="36" width="200" height="50" rx="8"/>
+<text class="dg-txt" x="380" y="58">工具调用请求</text>
+<text class="dg-txt2" x="380" y="75">tool_use</text>
+<path class="dg-edge" d="M 380 86 V 116 H 140 V 162" marker-end="url(#ap)"/>
+<path class="dg-edge" d="M 380 86 V 162" marker-end="url(#ap)"/>
+<path class="dg-edge" d="M 380 86 V 116 H 620 V 162" marker-end="url(#ap)"/>
+<text class="dg-cmt" x="140" y="150">命中即决定</text>
+<text class="dg-cmt" x="380" y="150">自动分级</text>
+<text class="dg-cmt" x="620" y="150">全局策略</text>
+<rect class="dg-node" x="50" y="166" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="140" y="190">allow / deny</text>
+<text class="dg-txt2" x="140" y="207">名单命中？</text>
+<rect class="dg-node hl" x="290" y="166" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="380" y="190">YOLO 分级</text>
+<text class="dg-txt2" x="380" y="207">LOW / MEDIUM / HIGH</text>
+<rect class="dg-node" x="530" y="166" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="620" y="190">权限模式</text>
+<text class="dg-txt2" x="620" y="207">default / plan / ...</text>
+<line class="dg-edge" x1="140" y1="220" x2="140" y2="292" marker-end="url(#ap)"/>
+<line class="dg-edge" x1="380" y1="220" x2="380" y2="292" marker-end="url(#ap)"/>
+<line class="dg-edge" x1="620" y1="220" x2="620" y2="292" marker-end="url(#ap)"/>
+<rect class="dg-node" x="50" y="296" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="140" y="320">放行</text>
+<text class="dg-txt2" x="140" y="337">不打扰你</text>
+<rect class="dg-node" x="290" y="296" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="380" y="320">询问</text>
+<text class="dg-txt2" x="380" y="337">弹窗确认</text>
+<rect class="dg-node" x="530" y="296" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="620" y="320">拒绝</text>
+<text class="dg-txt2" x="620" y="337">强烈确认 / 拦截</text>
+<text class="dg-txt2" x="380" y="384">LOW 放行 · MEDIUM 询问 · HIGH 拒绝</text>
+</svg><p class="dg-cap">FIG 05 · tool_use 到真正执行之间：白/黑名单、YOLO 分级、权限模式三道闸门</p></div>
 <h2 id="sec-lists"><span class="h2-num">05 /</span>allowlist / denylist：手动写死的规则</h2>
 <p>除了自动分级，你还可以手动指定规则。在 <code>~/.claude/settings.json</code> 里配置：</p>
 <figure class="codeblock" data-lang="json"><pre class="codebody"><code>{
@@ -105,7 +139,9 @@ if __name__ == "__main__":
     main()</code></pre></figure>
 <div class="callout warn"><span class="co-label">安全底线</span>权限系统是「默认信任 + 分级确认」，不是万能保险。永远不要在 <code>bypassPermissions</code> 下跑不确定的命令，也不要把 API Key 交给不信任的来源。</div>
 <div class="quiz"><div class="quiz-item" data-answer="A"><p class="quiz-q">1. 「YOLO 分类器」主要做什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 给工具调用按风险分级并决定放行/询问/拒绝</button><button type="button" data-opt="B">B. 给代码提速</button><button type="button" data-opt="C">C. 压缩上下文</button></div><div class="quiz-feedback"><span class="mark"></span> classifyYoloAction 把调用分为 LOW/MEDIUM/HIGH 三档，对应自动放行、询问、拒绝。 <a href="#sec-yolo">回看：YOLO</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">2. 在 plan 模式下，模型能执行 Bash 工具吗？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 能，但会先问你</button><button type="button" data-opt="B">B. 不能，只规划不执行</button><button type="button" data-opt="C">C. 取决于命令长短</button></div><div class="quiz-feedback"><span class="mark"></span> plan 模式拒绝执行任何工具，只输出计划等你批准。 <a href="#sec-modes">回看：权限模式</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. allowlist / denylist（白/黑名单）的作用是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 手动写死规则：名单内放行、名单外拒绝</button><button type="button" data-opt="B">B. 让所有命令都必须确认</button><button type="button" data-opt="C">C. 提高模型的推理速度</button></div><div class="quiz-feedback"><span class="mark"></span> 除了自动风险分级，你还可以在 settings.json 里手动指定永远放行或永远拒绝的规则。 <a href="#sec-lists">回看：allowlist / denylist</a></div></div></div>
-<div class="callout"><span class="co-label">本章小结</span><ul><li>权限模式：default / acceptEdits / plan / bypassPermissions。</li><li>YOLO 分类器按风险分级：LOW 放行、MEDIUM 询问、HIGH 拒绝。</li><li>allowlist/denylist 手动写死规则；命令注入检查默认开启。</li></ul></div><div class="prevnext" id="prevNext"></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>权限模式：default / acceptEdits / plan / bypassPermissions。</li><li>YOLO 分类器按风险分级：LOW 放行、MEDIUM 询问、HIGH 拒绝。</li><li>allowlist/denylist 手动写死规则；命令注入检查默认开启。</li></ul></div>
+<div class="myth-list"><div class="myth-item"><span class="mx">✗ 误区：</span>以为 bypassPermissions 更省事、推荐日常用<br><span class="mok">✓ 真相：</span><span class="truth">它跳过全部确认，非常危险；日常应该用 default 或 acceptEdits。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>以为 YOLO 是让模型「自己看一遍再决定」<br><span class="mok">✓ 真相：</span><span class="truth">YOLO 是本地分类器：按风险把调用分成 LOW/MEDIUM/HIGH，决定放行、询问还是拒绝。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>以为白名单能覆盖一切风险<br><span class="mok">✓ 真相：</span><span class="truth">allowlist/denylist 只是手动规则，命令注入检查等防线依然要开着。</span></div></div>
+<details class="challenge"><summary>动手挑战</summary><p class="ch-task">用 <code>permissions.py</code> 分别测试读文件（LOW）、写文件（MEDIUM）、<code>rm -rf</code>（HIGH）三种命令，记录输出；再把某个 MEDIUM 命令加入 allowlist，观察变化。</p><details class="ch-hint"><summary>提示 / 参考答案思路</summary><p>理解「默认信任 + 分级确认」：LOW 静默放行、MEDIUM 询问、HIGH 拒绝；名单是叠加在分级之上的手动规则。</p></details></details><div class="prevnext" id="prevNext"></div>
 </div></main>
 </div>
 <footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>

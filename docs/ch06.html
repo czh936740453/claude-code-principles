@@ -139,13 +139,41 @@ def main() -&gt; None:
 
 if __name__ == "__main__":
     main()</code></pre></figure>
+<div class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" role="img" aria-label="上下文窗口构成">
+<defs><marker id="ac" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<text class="dg-txt" x="400" y="36">一次请求实际发给模型的全部内容</text>
+<rect class="dg-node" x="40" y="80" width="80" height="80"/>
+<text class="dg-lbl" x="80" y="70">系统提示</text>
+<text class="dg-txt2" x="80" y="124">≈2K</text>
+<rect class="dg-node" x="120" y="80" width="100" height="80"/>
+<text class="dg-lbl" x="170" y="70">CLAUDE.md</text>
+<text class="dg-txt2" x="170" y="124">≈8K</text>
+<rect class="dg-node hl" x="220" y="80" width="250" height="80"/>
+<text class="dg-lbl" x="345" y="70">会话历史</text>
+<text class="dg-txt2" x="345" y="124">≈180K</text>
+<rect class="dg-node" x="470" y="80" width="130" height="80"/>
+<text class="dg-lbl" x="535" y="70">工具定义</text>
+<text class="dg-txt2" x="535" y="124">≈30K</text>
+<rect class="dg-node" x="600" y="80" width="120" height="80"/>
+<text class="dg-lbl" x="660" y="70">空余</text>
+<text class="dg-txt2" x="660" y="124">剩余</text>
+<line class="dg-ln" x1="120" y1="80" x2="120" y2="160"/>
+<line class="dg-ln" x1="220" y1="80" x2="220" y2="160"/>
+<line class="dg-ln" x1="470" y1="80" x2="470" y2="160"/>
+<line class="dg-ln" x1="600" y1="80" x2="600" y2="160"/>
+<line class="dg-ln" x1="584" y1="56" x2="584" y2="176"/>
+<text class="dg-txt2" x="584" y="48">80% 阈值</text>
+<text class="dg-cmt" x="400" y="205">超过阈值 → auto-compact：把旧消息压成摘要，腾出空间</text>
+</svg><p class="dg-cap">FIG 06 · 上下文 = 一段固定预算；超过 80% 触发 auto-compact 压缩</p></div>
 <h2 id="sec-compact"><span class="h2-num">06 /</span>快满了怎么办：压缩 Compact</h2>
 <p>当上下文快满时，Claude Code 会触发<strong>压缩（Compact）</strong>：把最早的一部分消息交给模型浓缩成一段摘要，替换掉原文，腾出空间继续干活。</p>
 <ul><li><strong>auto-compact</strong>：达到阈值自动压缩，不用你操心。</li><li><strong>/compact 命令</strong>：手动触发压缩。</li><li><strong>history-snip</strong>：把超长的旧消息截断 / 精简。</li><li><strong>context collapse</strong>：极端情况下把整体浓缩成一句话摘要（细节会丢失）。</li></ul>
 <p>压缩的本质是<strong>用细节换空间</strong>：旧内容变成「还记得做过 X」的摘要，具体细节就没了。这也是为什么超长会话做复杂任务容易「失忆」。拖动下面的滑块感受一下阈值逻辑：</p>
 <div class="demo" id="ctxDemo"><p class="demo-title">拖动滑块，观察上下文占用与压缩触发</p><input type="range" min="10" max="100" value="45" style="width:100%" aria-label="上下文占用"><div class="ctx-bar" style="margin-top:14px"><i></i><span class="thresh" style="left:80%"></span></div><div class="ctx-meta"></div><p class="ctx-info" style="font-size:14px;color:var(--text-2);margin-top:10px"></p></div>
 <div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. 会话（Session）和上下文（Context）的关系是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 完全一样的东西</button><button type="button" data-opt="B">B. 会话负责持久化存储，上下文负责每次请求的内容</button><button type="button" data-opt="C">C. 上下文存在云端</button></div><div class="quiz-feedback"><span class="mark"></span> 会话是「外壳」，把对话存到本地；上下文是每次请求实际发给模型的全部内容。 <a href="#sec-session">回看：会话</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">2. 上下文快满时，auto-compact 会做什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 直接报错停止</button><button type="button" data-opt="B">B. 把旧消息浓缩成摘要腾出空间</button><button type="button" data-opt="C">C. 换更大的模型</button></div><div class="quiz-feedback"><span class="mark"></span> 压缩把早期消息变成摘要，用细节换空间，让对话继续。 <a href="#sec-compact">回看：压缩</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 会话文件存在哪里？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 本地磁盘，换电脑或删目录就没了</button><button type="button" data-opt="B">B. Anthropic 云端</button><button type="button" data-opt="C">C. 浏览器缓存</button></div><div class="quiz-feedback"><span class="mark"></span> 会话序列化存在本地，负责持久化；上下文才是每次请求发出去的内容。 <a href="#sec-session">回看：会话</a></div></div></div>
-<div class="callout"><span class="co-label">本章小结</span><ul><li>会话把对话持久化到本地，重启后可恢复接着聊。</li><li>上下文窗口是稀缺资源：200K / 1M token，越长越贵越慢。</li><li>快满了就压缩：auto-compact、/compact、history-snip。</li></ul></div><div class="prevnext" id="prevNext"></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>会话把对话持久化到本地，重启后可恢复接着聊。</li><li>上下文窗口是稀缺资源：200K / 1M token，越长越贵越慢。</li><li>快满了就压缩：auto-compact、/compact、history-snip。</li></ul></div>
+<div class="myth-list"><div class="myth-item"><span class="mx">✗ 误区：</span>以为会话 = 上下文<br><span class="mok">✓ 真相：</span><span class="truth">会话负责持久化（存本地），上下文负责每次请求的实际内容，两者不是一回事。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>以为 1M token 窗口很大，永远用不完<br><span class="mok">✓ 真相：</span><span class="truth">代码、日志、历史加起来很快就能填满，所以需要压缩和预算管理。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>以为压缩不丢任何信息<br><span class="mok">✓ 真相：</span><span class="truth">压缩把旧消息浓缩成摘要，用细节换空间——超长会话「失忆」是真实存在的。</span></div></div>
+<details class="challenge"><summary>动手挑战</summary><p class="ch-task">把 <code>context_manager.py</code> 的压缩阈值从 0.8 改成 0.5 再运行，观察触发时机变化；再想想：为什么阈值越低越「健忘」？</p><details class="ch-hint"><summary>提示 / 参考答案思路</summary><p>阈值越低越早压缩，被压成摘要的旧内容越多，细节丢得越早。</p></details></details><div class="prevnext" id="prevNext"></div>
 </div></main>
 </div>
 <footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>

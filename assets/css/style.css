@@ -732,3 +732,92 @@ html[data-font="2"] .content-inner { max-width: 800px; }
 @media print {
   .poly-section { display: none !important; }
 }
+
+/* ============================================================
+   拓展增强：示意图 / 常见误区 / 动手挑战 / 易混对比 / 继续学习
+   ============================================================ */
+
+/* ---------- 原理示意图（内联 SVG，随主题自适应） ---------- */
+.diagram {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+  padding: 18px 14px 12px;
+  margin: 22px 0;
+  overflow-x: auto;
+}
+.diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+.diagram .dg-cap {
+  text-align: center; font-size: 12px; color: var(--text-3);
+  font-family: var(--mono); letter-spacing: 1px; margin: 10px 0 0;
+}
+.dg-node { fill: var(--bg-raise); stroke: var(--border-strong); stroke-width: 1.4; }
+.dg-node.hl { fill: var(--hover); stroke: var(--text-3); stroke-width: 1.8; }
+.dg-edge { stroke: var(--text-3); stroke-width: 1.5; fill: none; }
+.dg-edge.dash { stroke-dasharray: 6 5; }
+.dg-arrow { fill: var(--text-3); }
+.dg-txt { fill: var(--text); font-family: var(--mono); font-size: 13px; text-anchor: middle; }
+.dg-txt2 { fill: var(--text-2); font-family: var(--mono); font-size: 11.5px; text-anchor: middle; }
+.dg-cmt { fill: #5f8f4e; font-family: var(--mono); font-size: 11.5px; text-anchor: middle; }
+[data-theme="dark"] .dg-cmt { fill: #6a9955; }
+.dg-kw { fill: #7a3e9d; font-family: var(--mono); font-weight: 700; font-size: 12.5px; text-anchor: middle; }
+[data-theme="dark"] .dg-kw { fill: #c586c0; }
+.dg-fn { fill: #936b00; font-family: var(--mono); font-weight: 700; font-size: 12.5px; text-anchor: middle; }
+[data-theme="dark"] .dg-fn { fill: #dcdcaa; }
+.dg-str { fill: #a34f1e; font-family: var(--mono); font-size: 12.5px; text-anchor: middle; }
+[data-theme="dark"] .dg-str { fill: #ce9178; }
+.dg-typ { fill: #0f766e; font-family: var(--mono); font-weight: 700; font-size: 12.5px; text-anchor: middle; }
+[data-theme="dark"] .dg-typ { fill: #4ec9b0; }
+.dg-ln { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 4 4; }
+.dg-lbl { fill: var(--text-3); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+
+/* ---------- 常见误区 ---------- */
+.myth-list { margin: 18px 0; display: grid; gap: 10px; }
+.myth-item {
+  border: 1px solid var(--border); border-left: 3px solid var(--border-strong);
+  border-radius: 8px; padding: 10px 14px; background: var(--bg-soft);
+  font-size: 14.5px; line-height: 1.65;
+}
+.myth-item .mx { color: var(--text-3); font-weight: 700; }
+.myth-item .mok { color: var(--text); font-weight: 700; }
+.myth-item .truth { color: var(--text-2); }
+
+/* ---------- 动手挑战（可折叠） ---------- */
+.challenge {
+  border: 1px dashed var(--border-strong); border-radius: var(--radius);
+  background: var(--bg-soft); margin: 20px 0;
+}
+.challenge > summary {
+  cursor: pointer; list-style: none; padding: 12px 16px;
+  font-weight: 700; font-size: 14.5px; display: flex; align-items: center; gap: 8px;
+}
+.challenge > summary::-webkit-details-marker { display: none; }
+.challenge > summary::before { content: "\2692"; color: var(--text-3); }
+.challenge[open] > summary { border-bottom: 1px solid var(--border); }
+.ch-task { padding: 12px 16px 6px; margin: 0; font-size: 14.5px; line-height: 1.7; }
+.ch-hint { border-top: 1px dashed var(--border); margin: 8px 16px 14px; }
+.ch-hint summary {
+  cursor: pointer; list-style: none; font-size: 13px; color: var(--text-2);
+  padding: 9px 0; font-weight: 600;
+}
+.ch-hint summary::-webkit-details-marker { display: none; }
+.ch-hint summary::before { content: "\25B8"; margin-right: 6px; }
+.ch-hint[open] summary::before { content: "\25BE"; }
+.ch-hint p { margin: 0 0 10px; font-size: 14px; color: var(--text-2); line-height: 1.7; }
+
+/* ---------- 首页：继续学习卡片 ---------- */
+.continue-card {
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--bg-raise); padding: 14px 18px; margin: 16px 0 4px;
+  display: flex; align-items: center; gap: 14px;
+}
+.continue-card[hidden] { display: none; }
+.continue-card .cc-info { flex: 1; min-width: 0; }
+.continue-card .cc-info b { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.continue-card .cc-info span { font-size: 13px; color: var(--text-2); }
+.continue-card .btn { white-space: nowrap; }
+
+/* ---------- 术语表：易混概念对比 ---------- */
+.compare-block { margin-top: 44px; }
+.compare-block h2 { border-top: 1px solid var(--border); padding-top: 30px; }
+.compare-block .cb-note { font-size: 13px; color: var(--text-3); margin-top: -8px; }

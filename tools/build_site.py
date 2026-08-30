@@ -58,6 +58,171 @@ def env_tabs(panes):
     return ('<div class="envtabs"><div class="tabbar">' + "".join(btns) +
             "</div>" + "".join(panes_html) + "</div>")
 
+
+# ---------- 章节原理示意图（内联 SVG，随主题自适应） ----------
+DIAGRAM_SVGS = {
+"flow": r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 330" role="img" aria-label="一次对话的端到端数据流">
+<defs><marker id="af" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<rect class="dg-node" x="20" y="60" width="140" height="58" rx="8"/>
+<text class="dg-txt" x="90" y="84">claude &quot;帮我看看&quot;</text>
+<text class="dg-txt2" x="90" y="103">输入</text>
+<rect class="dg-node" x="185" y="60" width="140" height="58" rx="8"/>
+<text class="dg-txt" x="255" y="84">解析参数 / 命令</text>
+<text class="dg-txt2" x="255" y="103">CLI 解析</text>
+<rect class="dg-node" x="350" y="60" width="140" height="58" rx="8"/>
+<text class="dg-txt" x="420" y="84">读取历史</text>
+<text class="dg-txt2" x="420" y="103">会话恢复</text>
+<rect class="dg-node hl" x="515" y="60" width="170" height="58" rx="8"/>
+<text class="dg-txt" x="600" y="84">四件套拼装</text>
+<text class="dg-txt2" x="600" y="103">上下文组装</text>
+<rect class="dg-node" x="710" y="60" width="130" height="58" rx="8"/>
+<text class="dg-txt" x="775" y="84">HTTP</text>
+<text class="dg-txt2" x="775" y="103">API 请求</text>
+<line class="dg-edge" x1="160" y1="89" x2="180" y2="89" marker-end="url(#af)"/>
+<line class="dg-edge" x1="325" y1="89" x2="345" y2="89" marker-end="url(#af)"/>
+<line class="dg-edge" x1="490" y1="89" x2="510" y2="89" marker-end="url(#af)"/>
+<line class="dg-edge" x1="685" y1="89" x2="705" y2="89" marker-end="url(#af)"/>
+<path class="dg-edge" d="M 775 118 V 152 H 675 V 196" marker-end="url(#af)"/>
+<rect class="dg-node" x="600" y="200" width="150" height="58" rx="8"/>
+<text class="dg-txt" x="675" y="224">本地执行</text>
+<text class="dg-txt2" x="675" y="243">Bash / Read / Edit</text>
+<path class="dg-edge dash" d="M 620 200 V 122" marker-end="url(#af)"/>
+<text class="dg-cmt" x="700" y="180">结果回填 · 循环</text>
+<text class="dg-cmt" x="440" y="285">循环：直到模型返回普通文本，任务完成</text>
+</svg>''',
+"loop": r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 420" role="img" aria-label="代理循环">
+<defs><marker id="al" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<circle class="dg-node" cx="280" cy="70" r="54"/>
+<text class="dg-txt" x="280" y="66">感知</text>
+<text class="dg-txt2" x="280" y="84">收集状态</text>
+<circle class="dg-node" cx="410" cy="200" r="54"/>
+<text class="dg-txt" x="410" y="196">决策</text>
+<text class="dg-txt2" x="410" y="214">模型决定下一步</text>
+<circle class="dg-node" cx="280" cy="330" r="54"/>
+<text class="dg-txt" x="280" y="326">行动</text>
+<text class="dg-txt2" x="280" y="344">执行工具</text>
+<circle class="dg-node" cx="150" cy="200" r="54"/>
+<text class="dg-txt" x="150" y="196">观察</text>
+<text class="dg-txt2" x="150" y="214">结果放回上下文</text>
+<line class="dg-edge" x1="324" y1="101" x2="366" y2="169" marker-end="url(#al)"/>
+<line class="dg-edge" x1="372" y1="238" x2="242" y2="292" marker-end="url(#al)"/>
+<line class="dg-edge" x1="242" y1="292" x2="188" y2="238" marker-end="url(#al)"/>
+<line class="dg-edge" x1="112" y1="162" x2="242" y2="108" marker-end="url(#al)"/>
+<text class="dg-kw" x="280" y="208">while 任务未完成:</text>
+<text class="dg-txt2" x="280" y="228">感知 → 决策 → 行动 → 观察</text>
+<line class="dg-edge dash" x1="464" y1="200" x2="494" y2="200" marker-end="url(#al)"/>
+<text class="dg-txt2" x="525" y="195">完成</text>
+<text class="dg-txt2" x="525" y="212">→ 输出</text>
+<text class="dg-cmt" x="280" y="402">终止条件：模型主动结束 / 步数上限 / 用户打断</text>
+</svg>''',
+"tool": r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 320" role="img" aria-label="工具系统调用流程">
+<defs><marker id="at" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<text class="dg-lbl" x="120" y="30">模型 MODEL</text>
+<text class="dg-lbl" x="400" y="30">HARNESS 代理外壳</text>
+<text class="dg-lbl" x="695" y="30">工具 TOOLS</text>
+<line class="dg-ln" x1="250" y1="50" x2="250" y2="250"/>
+<line class="dg-ln" x1="540" y1="50" x2="540" y2="250"/>
+<rect class="dg-node" x="50" y="70" width="140" height="54" rx="8"/>
+<text class="dg-txt" x="120" y="92">tool_use</text>
+<text class="dg-txt2" x="120" y="110">我想调用 read_file</text>
+<rect class="dg-node hl" x="330" y="70" width="140" height="54" rx="8"/>
+<text class="dg-txt" x="400" y="92">权限检查</text>
+<text class="dg-txt2" x="400" y="110">放行？</text>
+<rect class="dg-node" x="630" y="70" width="130" height="54" rx="8"/>
+<text class="dg-txt" x="695" y="92">执行工具</text>
+<text class="dg-txt2" x="695" y="110">真正干活</text>
+<rect class="dg-node" x="330" y="200" width="140" height="48" rx="8"/>
+<text class="dg-txt" x="400" y="222">tool_result</text>
+<text class="dg-txt2" x="400" y="238">结果回填</text>
+<rect class="dg-node" x="50" y="200" width="140" height="48" rx="8"/>
+<text class="dg-txt" x="120" y="222">写回上下文</text>
+<text class="dg-txt2" x="120" y="238">模型继续决策</text>
+<line class="dg-edge" x1="190" y1="97" x2="326" y2="97" marker-end="url(#at)"/>
+<text class="dg-cmt" x="258" y="84">tool_use</text>
+<line class="dg-edge" x1="470" y1="97" x2="626" y2="97" marker-end="url(#at)"/>
+<text class="dg-cmt" x="548" y="84">放行后执行</text>
+<path class="dg-edge" d="M 695 124 V 155 H 400 V 196" marker-end="url(#at)"/>
+<text class="dg-cmt" x="548" y="148">tool_result</text>
+<line class="dg-edge" x1="326" y1="224" x2="194" y2="224" marker-end="url(#at)"/>
+<text class="dg-cmt" x="260" y="192">结果放回</text>
+<text class="dg-cmt" x="410" y="292">闸门：tool_use 与真正执行之间，先过权限检查</text>
+</svg>''',
+"perm": r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 400" role="img" aria-label="权限决策流程">
+<defs><marker id="ap" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<rect class="dg-node" x="280" y="36" width="200" height="50" rx="8"/>
+<text class="dg-txt" x="380" y="58">工具调用请求</text>
+<text class="dg-txt2" x="380" y="75">tool_use</text>
+<path class="dg-edge" d="M 380 86 V 116 H 140 V 162" marker-end="url(#ap)"/>
+<path class="dg-edge" d="M 380 86 V 162" marker-end="url(#ap)"/>
+<path class="dg-edge" d="M 380 86 V 116 H 620 V 162" marker-end="url(#ap)"/>
+<text class="dg-cmt" x="140" y="150">命中即决定</text>
+<text class="dg-cmt" x="380" y="150">自动分级</text>
+<text class="dg-cmt" x="620" y="150">全局策略</text>
+<rect class="dg-node" x="50" y="166" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="140" y="190">allow / deny</text>
+<text class="dg-txt2" x="140" y="207">名单命中？</text>
+<rect class="dg-node hl" x="290" y="166" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="380" y="190">YOLO 分级</text>
+<text class="dg-txt2" x="380" y="207">LOW / MEDIUM / HIGH</text>
+<rect class="dg-node" x="530" y="166" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="620" y="190">权限模式</text>
+<text class="dg-txt2" x="620" y="207">default / plan / ...</text>
+<line class="dg-edge" x1="140" y1="220" x2="140" y2="292" marker-end="url(#ap)"/>
+<line class="dg-edge" x1="380" y1="220" x2="380" y2="292" marker-end="url(#ap)"/>
+<line class="dg-edge" x1="620" y1="220" x2="620" y2="292" marker-end="url(#ap)"/>
+<rect class="dg-node" x="50" y="296" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="140" y="320">放行</text>
+<text class="dg-txt2" x="140" y="337">不打扰你</text>
+<rect class="dg-node" x="290" y="296" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="380" y="320">询问</text>
+<text class="dg-txt2" x="380" y="337">弹窗确认</text>
+<rect class="dg-node" x="530" y="296" width="180" height="54" rx="8"/>
+<text class="dg-txt" x="620" y="320">拒绝</text>
+<text class="dg-txt2" x="620" y="337">强烈确认 / 拦截</text>
+<text class="dg-txt2" x="380" y="384">LOW 放行 · MEDIUM 询问 · HIGH 拒绝</text>
+</svg>''',
+"ctx": r'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 250" role="img" aria-label="上下文窗口构成">
+<defs><marker id="ac" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<text class="dg-txt" x="400" y="36">一次请求实际发给模型的全部内容</text>
+<rect class="dg-node" x="40" y="80" width="80" height="80"/>
+<text class="dg-lbl" x="80" y="70">系统提示</text>
+<text class="dg-txt2" x="80" y="124">≈2K</text>
+<rect class="dg-node" x="120" y="80" width="100" height="80"/>
+<text class="dg-lbl" x="170" y="70">CLAUDE.md</text>
+<text class="dg-txt2" x="170" y="124">≈8K</text>
+<rect class="dg-node hl" x="220" y="80" width="250" height="80"/>
+<text class="dg-lbl" x="345" y="70">会话历史</text>
+<text class="dg-txt2" x="345" y="124">≈180K</text>
+<rect class="dg-node" x="470" y="80" width="130" height="80"/>
+<text class="dg-lbl" x="535" y="70">工具定义</text>
+<text class="dg-txt2" x="535" y="124">≈30K</text>
+<rect class="dg-node" x="600" y="80" width="120" height="80"/>
+<text class="dg-lbl" x="660" y="70">空余</text>
+<text class="dg-txt2" x="660" y="124">剩余</text>
+<line class="dg-ln" x1="120" y1="80" x2="120" y2="160"/>
+<line class="dg-ln" x1="220" y1="80" x2="220" y2="160"/>
+<line class="dg-ln" x1="470" y1="80" x2="470" y2="160"/>
+<line class="dg-ln" x1="600" y1="80" x2="600" y2="160"/>
+<line class="dg-ln" x1="584" y1="56" x2="584" y2="176"/>
+<text class="dg-txt2" x="584" y="48">80% 阈值</text>
+<text class="dg-cmt" x="400" y="205">超过阈值 → auto-compact：把旧消息压成摘要，腾出空间</text>
+</svg>''',
+}
+
+DIAGRAM_CAPS = {
+    'flow': 'FIG 02 · 输入 → 解析 → 会话恢复 → 上下文组装 → API；工具结果经虚线回填，循环直到完成',
+    'loop': 'FIG 03 · while 任务未完成：感知 → 决策 → 行动 → 观察',
+    'tool': 'FIG 04 · 模型只发 tool_use 请求，Harness 检查后执行，结果回填上下文',
+    'perm': 'FIG 05 · tool_use 到真正执行之间：白/黑名单、YOLO 分级、权限模式三道闸门',
+    'ctx': 'FIG 06 · 上下文 = 一段固定预算；超过 80% 触发 auto-compact 压缩',
+}
+
+def render_diagram(name):
+    svg = DIAGRAM_SVGS.get(name, "")
+    cap = DIAGRAM_CAPS.get(name, "")
+    cap_html = ('<p class="dg-cap">' + cap + '</p>') if cap else ""
+    return '<div class="diagram">' + svg + cap_html + '</div>'
+
 def render_blocks(blocks, ch_num=""):
     """把内容块渲染成正文 HTML。"""
     out = []
@@ -109,6 +274,21 @@ def render_blocks(blocks, ch_num=""):
             out.append(f'<div class="callout"><span class="co-label">本章小结</span><ul>{items}</ul></div>')
         elif k == "demo":
             out.append(render_demo(b[1]))
+        elif k == "diagram":
+            out.append(render_diagram(b[1]))
+        elif k == "myths":
+            myth_html = "".join(
+                '<div class="myth-item"><span class="mx">✗ 误区：</span>'
+                + inline_md(m)
+                + '<br><span class="mok">✓ 真相：</span><span class="truth">'
+                + inline_md(t) + "</span></div>" for m, t in b[1])
+            out.append('<div class="myth-list">' + myth_html + "</div>")
+        elif k == "challenge":
+            task, hint = b[1]
+            out.append('<details class="challenge"><summary>动手挑战</summary>'
+                       '<p class="ch-task">' + inline_md(task) + "</p>"
+                       '<details class="ch-hint"><summary>提示 / 参考答案思路</summary><p>'
+                       + inline_md(hint) + "</p></details></details>")
         elif k == "html":
             out.append(b[1])
     return "\n".join(out)
@@ -345,6 +525,12 @@ def build_home():
         'aria-label="站内搜索">'
         '</div><div id="searchResults" class="search-results"></div>'
     )
+    continue_card = (
+        '<div class="continue-card" id="continueCard" hidden>'
+        '<div class="cc-info"><b id="continueTitle">继续学习</b>'
+        '<span id="continueMeta"></span></div>'
+        '<a class="btn" id="continueLink" href="docs/ch01.html">继续学习 →</a></div>'
+    )
     poly_section = (
         '<section class="poly-section" aria-label="章节多面体">'
         '<div class="section-head"><h2>章节多面体</h2><span class="en">DRAG TO ROTATE · CLICK A FACE</span></div>'
@@ -383,7 +569,7 @@ def build_home():
         "<h1>Claude Code 原理图解</h1>"
         '<p class="sub">用大白话讲清楚终端里的 AI 编程代理到底是怎么工作的：'
         "从一次对话的数据流，到代理循环、工具系统、权限安全、上下文管理，再到怎么读源码、怎么动手复刻。</p>"
-        f"{progress}{search}{search_data}</section>"
+        f"{progress}{continue_card}{search}{search_data}</section>"
         f"{poly_section}"
         '<script src="assets/js/poly.js"></script>'
         '<div class="content-inner" style="max-width:820px;padding-top:8px">'
@@ -446,11 +632,40 @@ def build_glossary():
             f"<code>{esc(term)}</code><b>{esc(zh)}</b>"
             f'<a class="gt-ch" href="docs/{ch_id}.html#{anchor}">{label}</a>'
             f"</div><p>{esc(desc)}</p></div>")
+    def ctable(headers, rows):
+        th = "".join("<th>" + inline_md(h) + "</th>" for h in headers)
+        trs = []
+        for row in rows:
+            tds = "".join("<td>" + inline_md(c) + "</td>" for c in row)
+            trs.append("<tr>" + tds + "</tr>")
+        return "<table><thead><tr>" + th + "</tr></thead><tbody>" + "".join(trs) + "</tbody></table>"
+
+    compare = (
+        '<div class="compare-block"><h2>易混概念对比</h2>'
+        '<p class="cb-note">这几个词经常被混着用，这里一次性分清。</p>'
+        + ctable(
+            ["词", "一句话", "类比", "详见"],
+            [["Agent", "能自主循环「想 → 做 → 看」的程序", "实习生的工作方式", "第 3 章"],
+             ["Workflow", "步骤写死的固定流程", "提前画好的地图", "拓展篇"],
+             ["Harness", "把模型装成能安全干活的整机的那层工程代码", "工位 / 整车", "拓展篇"]])
+        + ctable(
+            ["维度", "Hook", "MCP"],
+            [["改变什么", "改变 Harness 在某个时机的行为", "给 Harness 增加新能力"],
+             ["触发方式", "事件驱动（时机到了就触发）", "按需调用（模型决定用不用）"],
+             ["类比", "闹钟 + 门卫哨", "万能 USB 口"]])
+        + ctable(
+            ["维度", "Session 会话", "Context 上下文"],
+            [["职责", "持久化：把对话存到本地文件", "每次请求实际发给模型的内容"],
+             ["生命周期", "跨会话存在，可恢复", "每次请求重新组装"],
+             ["类比", "笔记本 / 存档", "眼前的工作台"]])
+        + "</div>"
+    )
     body = (
         '<div class="hero"><div class="chapter-tag">QUICK REFERENCE</div>'
         "<h1>核心术语表</h1>"
         '<p class="goal">看文章时遇到看不懂的词，来这里查。每个术语一句话解释，并指向详细章节。</p></div>'
         f'<div class="glossary-list">{"".join(items)}</div>'
+        + compare
     )
     return page_shell("核心术语表", "Claude Code 核心术语速查", body, "glossary", "", "nav-glossary")
 
@@ -595,6 +810,12 @@ CH01 = {"blocks": [
       "区别在于「工具 + 权限」：它真的能操作你的电脑。",
       "它的工作方式是循环：目标 → 拆解 → 执行 → 检查 → 汇报。",
     ]),
+    ("myths", [
+      ('以为 Claude Code 是一个可以随时召唤的在线聊天机器人', '它是跑在你终端里的本地程序：要 API Key、能读你本地文件、能执行本地命令。'),
+      ('以为一次回答就等于完成一个任务', '一次对话往往包含多轮「请求 → 工具 → 结果」循环，直到任务真正完成。'),
+      ('以为它和 IDE 插件一样，只能补全代码', '它能在终端里自己动手：读文件、跑命令、改代码，而不只是给建议。'),
+    ]),
+    ("challenge", ('打开你的终端，把 `claude "用一句话说明这个目录是干什么的"` 换成你的真实目录并运行（没装 Claude Code 就用 `python` 随便跑一条命令）。观察：它是不是做了不止一件事？', '重点不是命令本身，而是感受「代理」和「一次性问答」的区别：一个会动手，一个只动嘴。')),
 ]}
 
 # ================= 第 2 章 =================
@@ -611,6 +832,7 @@ CH02 = {"blocks": [
       ("输出答案", "把最终的文字结果展示给你。"),
     ]),
     ("callout", "note", "记住这一句", "**API 本身是无状态的**：它不记得你，是 Claude Code 在本地负责「记住」并把整个历史每次重新发给它。上下文由客户端组装，这是理解后面一切的关键。"),
+    ("diagram", "flow"),
     ("h2", "上下文 = 它这次能「看到」的一切", "sec-context"),
     ("p", "每次请求，Claude Code 都会把下面这些东西**拼在一起**发给 API："),
     ("ul", [
@@ -659,6 +881,12 @@ CH02 = {"blocks": [
       "上下文在客户端组装，每次请求完整重发。",
       "上下文四件套：系统提示、CLAUDE.md、会话历史、工具定义。",
     ]),
+    ("myths", [
+      ('以为 API 服务器记得你们之前的对话', 'API 是无状态的：每次请求都重新发送完整上下文，由客户端负责记忆。'),
+      ('以为上下文里只有你发的消息', '上下文 = 系统提示 + CLAUDE.md + 会话历史 + 工具定义，是程序拼装出来的。'),
+      ('以为一次对话 = 一次 API 请求', '一次对话通常包含多次请求：发请求 → 收响应 → 执行工具 → 再发请求，直到完成。'),
+    ]),
+    ("challenge", ('照第 2 章的 JSON 示例，手写一个「包含一条 tool_result 消息」的最小请求体（不用运行）。', 'tool_result 要带 tool_use_id，和模型之前发出的 tool_use 的 id 对应；消息按 API 要求的 role 排列。')),
 ]}
 
 # ================= 第 3 章 =================
@@ -681,6 +909,7 @@ CH03 = {"blocks": [
         结果 = 执行工具(决定)     # 行动
         把结果放回上下文          # 观察
     # 回到 while，继续下一轮'''),
+    ("diagram", "loop"),
     ("demo", "loop"),
     ("h2", "为什么它叫「代理」而不是「问答」", "sec-why"),
     ("p", "聊天机器人只执行**一次**「输入 → 输出」。代理把这个过程**循环**起来，并且每一步都能**观察结果再决定下一步**——所以它能处理多步骤、需要动手的任务。有没有工具、能不能循环，是代理和聊天的分水岭。"),
@@ -708,6 +937,12 @@ CH03 = {"blocks": [
       "能不能循环、有没有工具，是代理与聊天的分水岭。",
       "结束方式：模型主动结束 / 达到上限 / 用户打断。",
     ]),
+    ("myths", [
+      ('以为代理循环会无限跑下去', '它有终止条件：模型主动结束、步数/token 上限、用户打断。'),
+      ('以为每次循环都必须调用工具', '每一步由模型决定：可以说普通文本直接结束，也可以调用工具继续。'),
+      ('以为「代理」=「用了大模型的程序」', '判断标准是有没有「感知 → 决策 → 行动 → 观察」的循环，而不是用没用模型。'),
+    ]),
+    ("challenge", ('读一遍 `agent_loop.py`：把 `mock_model` 改成第一次就返回普通文本，观察输出；再改成永远返回工具调用，观察上限怎么兜底。', '这能直观验证「终止条件」——第 3 章的 while 不是无限循环。')),
 ]}
 
 # ================= 第 4 章 =================
@@ -741,6 +976,7 @@ CH04 = {"blocks": [
 
 // 程序 → 模型：回填执行结果
 {"type": "tool_result", "tool_use_id": "toolu_01", "content": "今天要买牛奶、写周报"}'''),
+    ("diagram", "tool"),
     ("h2", "内置工具长什么样", "sec-builtin"),
     ("table", ["工具", "作用", "风险等级"],
       [["Bash", "执行 shell 命令（跑测试、装依赖、操作文件）", "高"],
@@ -765,6 +1001,12 @@ CH04 = {"blocks": [
       "模型只发 tool_use 请求，程序查注册表执行并回填 tool_result。",
       "工具调用前要先过权限闸门。",
     ]),
+    ("myths", [
+      ('以为模型直接调用工具函数', '模型只发 tool_use 请求；程序查注册表、校验参数、执行、回填结果。'),
+      ('以为工具越多越好', '每个工具都要占上下文 token；工具应该精简、说明清晰，够用就好。'),
+      ('以为模型能看到工具的源码实现', '模型看到的是 JSON Schema 说明书（名字 + 说明 + 参数格式），不是实现代码。'),
+    ]),
+    ("challenge", ('给 `tools.py` 加一个新工具 `list_dir`（列出目录内容），注册进 TOOLS 表，再让 `mock_model` 调用它。', '工具 = 名字 + 说明 + 函数三部分；加完要在调度器里查得到——查不到会报错，这正是注册表的意义。')),
 ]}
 
 # ================= 第 5 章 =================
@@ -786,6 +1028,7 @@ CH05 = {"blocks": [
     ]),
     ("p", "下面这个交互演示，带你走一遍完整决策流程："),
     ("demo", "tree"),
+    ("diagram", "perm"),
     ("h2", "allowlist / denylist：手动写死的规则", "sec-lists"),
     ("p", "除了自动分级，你还可以手动指定规则。在 `~/.claude/settings.json` 里配置："),
     ("code", None, "json", r'''{
@@ -817,6 +1060,12 @@ CH05 = {"blocks": [
       "YOLO 分类器按风险分级：LOW 放行、MEDIUM 询问、HIGH 拒绝。",
       "allowlist/denylist 手动写死规则；命令注入检查默认开启。",
     ]),
+    ("myths", [
+      ('以为 bypassPermissions 更省事、推荐日常用', '它跳过全部确认，非常危险；日常应该用 default 或 acceptEdits。'),
+      ('以为 YOLO 是让模型「自己看一遍再决定」', 'YOLO 是本地分类器：按风险把调用分成 LOW/MEDIUM/HIGH，决定放行、询问还是拒绝。'),
+      ('以为白名单能覆盖一切风险', 'allowlist/denylist 只是手动规则，命令注入检查等防线依然要开着。'),
+    ]),
+    ("challenge", ('用 `permissions.py` 分别测试读文件（LOW）、写文件（MEDIUM）、`rm -rf`（HIGH）三种命令，记录输出；再把某个 MEDIUM 命令加入 allowlist，观察变化。', '理解「默认信任 + 分级确认」：LOW 静默放行、MEDIUM 询问、HIGH 拒绝；名单是叠加在分级之上的手动规则。')),
 ]}
 
 CHAPTER_CONTENT = {"ch01": CH01, "ch02": CH02, "ch03": CH03, "ch04": CH04, "ch05": CH05}# ================= 第 6 章 =================
@@ -838,6 +1087,7 @@ CH06 = {"blocks": [
     ("p", "上下文里的每个字都要花钱（按 token 计费），而且越长响应越慢。所以 Claude Code 必须精打细算：**尽量少带、必要时压缩**。"),
     ("p", "怎么估算 token？粗略规则：中文约 1 字 ≈ 1 token，英文约 4 字符 ≈ 1 token。下面这个模块演示「估算 + 超阈值自动压缩」："),
     ("code", "context_manager.py", "python", None),
+    ("diagram", "ctx"),
     ("h2", "快满了怎么办：压缩 Compact", "sec-compact"),
     ("p", "当上下文快满时，Claude Code 会触发**压缩（Compact）**：把最早的一部分消息交给模型浓缩成一段摘要，替换掉原文，腾出空间继续干活。"),
     ("ul", [
@@ -861,6 +1111,12 @@ CH06 = {"blocks": [
       "上下文窗口是稀缺资源：200K / 1M token，越长越贵越慢。",
       "快满了就压缩：auto-compact、/compact、history-snip。",
     ]),
+    ("myths", [
+      ('以为会话 = 上下文', '会话负责持久化（存本地），上下文负责每次请求的实际内容，两者不是一回事。'),
+      ('以为 1M token 窗口很大，永远用不完', '代码、日志、历史加起来很快就能填满，所以需要压缩和预算管理。'),
+      ('以为压缩不丢任何信息', '压缩把旧消息浓缩成摘要，用细节换空间——超长会话「失忆」是真实存在的。'),
+    ]),
+    ("challenge", ('把 `context_manager.py` 的压缩阈值从 0.8 改成 0.5 再运行，观察触发时机变化；再想想：为什么阈值越低越「健忘」？', '阈值越低越早压缩，被压成摘要的旧内容越多，细节丢得越早。')),
 ]}
 
 # ================= 第 7 章 =================
@@ -901,6 +1157,12 @@ CH07 = {"blocks": [
       "斜杠命令和普通对话走不同分支，/ 开头触发内置指令。",
       "公开分析发现 26 个隐藏命令，多为实验功能。",
     ]),
+    ("myths", [
+      ('以为斜杠命令只有 /help 里那几条', '源码里还有 26 个隐藏命令，比如 /compact、/status、/context 等，/help 不展示它们。'),
+      ('以为 REPL 很神秘', 'REPL 就是一个 while 循环：读输入 → 处理 → 输出 → 再读。'),
+      ('以为斜杠命令是给模型用的', '斜杠命令是你（人类）在输入框里敲的快捷指令，用来控制程序行为。'),
+    ]),
+    ("challenge", ('给 `cli_repl.py` 加一个新斜杠命令 `/hello`：输入后打印一句问候，然后继续 REPL 循环。', '在解析斜杠命令的分支里加一个 elif；最后记得继续回到读输入。')),
 ]}# ================= 第 8 章 =================
 CH08 = {"blocks": [
     ("h2", "配置是怎么分层的", "sec-layers"),
@@ -939,6 +1201,12 @@ CH08 = {"blocks": [
       "120+ 环境变量、32 个构建时 flags 控制行为。",
       "tengu_* 灰度门控 + anthropic-beta 头声明实验能力。",
     ]),
+    ("myths", [
+      ('以为配置只有 settings.json 一个地方', '配置分多级：系统、项目、用户、本地，还有 120+ 环境变量可以覆盖。'),
+      ('以为特性开关是给普通用户用的', 'tengu_* 这类门控主要用于灰度发布内部/实验功能，普通用户一般接触不到。'),
+      ('以为环境变量越多越好', '每个变量都有默认值，显式设置会覆盖默认；滥用会导致配置混乱、难排查。'),
+    ]),
+    ("challenge", ('用 `config.py` 给某个配置项加一个环境变量覆盖，验证「环境变量 > 默认值」的优先级。', 'config.py 里已经演示了读取环境变量并覆盖默认值的写法，照葫芦画瓢即可。')),
 ]}
 
 # ================= 第 9 章 =================
@@ -996,6 +1264,12 @@ pub enum Message {
       "claw-code 用 Rust 重写，TS 模块 ↔ Rust crate 一一对应。",
       "PARITY.md 是移植对齐清单，也是读移植项目的最佳入口。",
     ]),
+    ("myths", [
+      ('以为 cli.js.map 是正常的开源文件', '它是打包产物里的源码映射，包含了未公开的实现细节——这正是「公开源码分析」的源头。'),
+      ('以为 Rust 移植 = 一行行翻译', '移植是对齐行为（PARITY），按模块重写，重点在行为与边界，而不是逐行翻译。'),
+      ('以为读懂源码必须从头读到尾', '正确姿势：找入口 → 追主线数据流 → 再看支线，而不是线性通读。'),
+    ]),
+    ("challenge", ('打开 claw-code 仓库（或手头任意 TS 项目），用「找入口 → 追数据流」的方法，5 分钟内找出它处理一条命令的入口文件。', '看 package.json 的 bin 字段 → 入口脚本 → main 函数 → 命令分发。')),
 ]}# ================= 第 10 章 =================
 CH10 = {"blocks": [
     ("h2", "读源码的三步法", "sec-read"),
@@ -1044,6 +1318,12 @@ CH10 = {"blocks": [
       "最小复刻从 agent loop 起步，逐步加工具、权限、会话、CLI、配置。",
       "守住安全与伦理边界：学习原理，不照抄滥用。",
     ]),
+    ("myths", [
+      ('以为要先学完所有理论才能动手', '最小复刻从第 3 章的 agent_loop.py 起步，边做边补理论。'),
+      ('以为复刻 = 照抄全部功能', '复刻的目的是理解原理：先做最小循环，再逐步加工具、权限、会话、CLI、配置。'),
+      ('以为公开源码分析可以随便商用发布', '学习原理没问题；绕过付费、攻击性用途、大规模商用转载都有伦理与法律边界。'),
+    ]),
+    ("challenge", ('按「最小复刻路线」给自己定一个两周计划：第 1 周跑通 agent_loop + 工具注册表；第 2 周加上权限分级与会话恢复。每完成一步，写一行「它对应原理的哪一章」。', '计划不在多，在于每步都能跑起来并回链到原理章节——这正是这个站想帮你建立的心智模型。')),
 ]}
 
 CHAPTER_CONTENT.update({"ch06": CH06, "ch07": CH07, "ch08": CH08, "ch09": CH09, "ch10": CH10})
@@ -1148,6 +1428,12 @@ EXT_BLOCKS = [
       "记忆分短期（上下文）与长期（CLAUDE.md、会话文件），都由 Harness 管。",
       "子代理 = 专人专岗，团队模式 = 分工协作；Hooks = 时机插槽，MCP = 万能接口。",
     ]),
+    ("myths", [
+      ('以为 Agent = 大模型', '模型只负责「想」，Agent 是「想 → 做 → 看 → 再想」的循环，Harness 是把它们装成整机的工程代码。'),
+      ('以为 Workflow 比 Agent 高级', '两者是不同路线：Workflow 步骤写死、稳定省钱；Agent 自主决策、灵活但不可预测。能写死的用工作流。'),
+      ('以为 Harness 只包含模型调用', 'Harness 包含循环、工具、权限、上下文、记忆、CLI、配置、Hooks 等一整套工程代码。'),
+    ]),
+    ("challenge", ('在 `harness.py` 里加一个「记录日志」的 Hook：每次工具执行前后各打印一行日志，跑一遍观察输出顺序。', 'Hook 的本质是在固定时机插入代码：找工具执行前后各加一个打印即可，对应正文里的「时机插槽」。')),
 ]
 
 # ================= 构建入口 =================

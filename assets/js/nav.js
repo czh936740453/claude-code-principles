@@ -68,7 +68,7 @@
 
   var K = {
     theme: "cc_theme", font: "cc_font",
-    visited: "cc_visited", completed: "cc_completed", pos: "cc_pos_"
+    visited: "cc_visited", completed: "cc_completed", last: "cc_last", pos: "cc_pos_"
   };
   var FONT_LEVELS = ["A-", "A", "A+"];
 
@@ -145,6 +145,7 @@
     var ch = curChapter(); if (!ch) return;
     var v = getVisited();
     if (v.indexOf(ch.id) === -1) { v.push(ch.id); setVisited(v); }
+    lsSet(K.last, ch.id);
   }
 
   /* 进度 UI：顶部导航条 + 首页面板 + 侧边栏勾选 */
@@ -183,6 +184,32 @@
 
     /* 通知首页「章节多面体」刷新颜色（仅首页监听） */
     try { window.dispatchEvent(new CustomEvent("cc:progress")); } catch (e) {}
+  }
+
+  /* ---------- 首页「继续学习」卡片 ---------- */
+  function renderContinueCard() {
+    var card = document.getElementById("continueCard");
+    if (!card) return;
+    var done = getCompleted();
+    if (done.length >= CHAPTERS.length) { card.hidden = true; return; }
+    var last = lsGet(K.last, null);
+    var next = null;
+    for (var i = 0; i < CHAPTERS.length; i++) {
+      if (CHAPTERS[i].id === last) {
+        if (i + 1 < CHAPTERS.length) next = CHAPTERS[i + 1];
+        break;
+      }
+    }
+    if (!next) next = CHAPTERS[0];
+    var title = document.getElementById("continueTitle");
+    var meta = document.getElementById("continueMeta");
+    var link = document.getElementById("continueLink");
+    if (title) title.textContent = "上次学到：第 " + next.num + " 章 · " + next.title;
+    if (meta) meta.textContent = done.length > 0
+      ? "已标记完成 " + done.length + " / " + CHAPTERS.length + " 章"
+      : "从第 1 章开始，按顺序学习";
+    if (link) link.href = pageHref(next);
+    card.hidden = false;
   }
 
   /* ---------- 侧边栏 ---------- */
@@ -350,6 +377,7 @@
     initReset();
     markVisited();
     renderProgress();
+    renderContinueCard();
 
     var tt = document.getElementById("themeToggle");
     if (tt) tt.addEventListener("click", function () {
@@ -361,7 +389,7 @@
 
     /* 跨页面进度同步 */
     window.addEventListener("storage", function (e) {
-      if (e.key === K.completed || e.key === K.visited) { renderProgress(); buildSidebar(); }
+      if (e.key === K.completed || e.key === K.visited || e.key === K.last) { renderProgress(); buildSidebar(); renderContinueCard(); }
     });
   }
 

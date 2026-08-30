@@ -28,6 +28,31 @@
         结果 = 执行工具(决定)     # 行动
         把结果放回上下文          # 观察
     # 回到 while，继续下一轮</code></pre></figure>
+<div class="diagram"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 420" role="img" aria-label="代理循环">
+<defs><marker id="al" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path class="dg-arrow" d="M0,0 L9,4 L0,8 Z"/></marker></defs>
+<circle class="dg-node" cx="280" cy="70" r="54"/>
+<text class="dg-txt" x="280" y="66">感知</text>
+<text class="dg-txt2" x="280" y="84">收集状态</text>
+<circle class="dg-node" cx="410" cy="200" r="54"/>
+<text class="dg-txt" x="410" y="196">决策</text>
+<text class="dg-txt2" x="410" y="214">模型决定下一步</text>
+<circle class="dg-node" cx="280" cy="330" r="54"/>
+<text class="dg-txt" x="280" y="326">行动</text>
+<text class="dg-txt2" x="280" y="344">执行工具</text>
+<circle class="dg-node" cx="150" cy="200" r="54"/>
+<text class="dg-txt" x="150" y="196">观察</text>
+<text class="dg-txt2" x="150" y="214">结果放回上下文</text>
+<line class="dg-edge" x1="324" y1="101" x2="366" y2="169" marker-end="url(#al)"/>
+<line class="dg-edge" x1="372" y1="238" x2="242" y2="292" marker-end="url(#al)"/>
+<line class="dg-edge" x1="242" y1="292" x2="188" y2="238" marker-end="url(#al)"/>
+<line class="dg-edge" x1="112" y1="162" x2="242" y2="108" marker-end="url(#al)"/>
+<text class="dg-kw" x="280" y="208">while 任务未完成:</text>
+<text class="dg-txt2" x="280" y="228">感知 → 决策 → 行动 → 观察</text>
+<line class="dg-edge dash" x1="464" y1="200" x2="494" y2="200" marker-end="url(#al)"/>
+<text class="dg-txt2" x="525" y="195">完成</text>
+<text class="dg-txt2" x="525" y="212">→ 输出</text>
+<text class="dg-cmt" x="280" y="402">终止条件：模型主动结束 / 步数上限 / 用户打断</text>
+</svg><p class="dg-cap">FIG 03 · while 任务未完成：感知 → 决策 → 行动 → 观察</p></div>
 <div class="demo" id="loopDemo"><p class="demo-title">试着走一轮代理循环（点击“下一步”）</p><div class="loop-grid"><div class="loop-cell"><span class="ic">01</span><b>感知</b>读取当前状态</div><div class="loop-cell"><span class="ic">02</span><b>决策</b>模型决定下一步</div><div class="loop-cell"><span class="ic">03</span><b>行动</b>调用工具</div><div class="loop-cell"><span class="ic">04</span><b>观察</b>结果回填上下文</div></div><div class="demo-log"></div><div class="demo-ctrl"><button class="btn btn-next">下一步</button><button class="btn btn-reset">重置</button><span class="status"></span></div></div>
 <h2 id="sec-why"><span class="h2-num">03 /</span>为什么它叫「代理」而不是「问答」</h2>
 <p>聊天机器人只执行<strong>一次</strong>「输入 → 输出」。代理把这个过程<strong>循环</strong>起来，并且每一步都能<strong>观察结果再决定下一步</strong>——所以它能处理多步骤、需要动手的任务。有没有工具、能不能循环，是代理和聊天的分水岭。</p>
@@ -90,7 +115,9 @@ if __name__ == "__main__":
     main()</code></pre></figure>
 <div class="callout tip"><span class="co-label">动手试</span>把 <code>agent_loop.py</code> 下载下来运行，观察终端输出：先调 <code>read_file</code>，再调 <code>bash</code>，最后模型认为完成、输出文字结束。这就是代理循环的最小形态。</div>
 <div class="quiz"><div class="quiz-item" data-answer="B"><p class="quiz-q">1. 代理循环每一步的顺序是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 决策 → 感知 → 行动 → 观察</button><button type="button" data-opt="B">B. 感知 → 决策 → 行动 → 观察</button><button type="button" data-opt="C">C. 行动 → 观察 → 感知 → 决策</button></div><div class="quiz-feedback"><span class="mark"></span> 先感知当前状态，再决策下一步，然后行动（调用工具），最后观察结果，回到循环。 <a href="#sec-loop">回看：核心</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">2. 循环什么时候正常结束？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 模型返回普通文本不再调用工具</button><button type="button" data-opt="B">B. 永远不结束</button><button type="button" data-opt="C">C. 每轮固定执行 100 次</button></div><div class="quiz-feedback"><span class="mark"></span> 模型认为任务完成、返回普通文本时结束；另有步数/token 上限和用户打断等兜底。 <a href="#sec-end">回看：终止条件</a></div></div><div class="quiz-item" data-answer="A"><p class="quiz-q">3. 代理和聊天机器人的「分水岭」是什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 能不能循环、有没有工具</button><button type="button" data-opt="B">B. 界面颜色不一样</button><button type="button" data-opt="C">C. 模型参数更多</button></div><div class="quiz-feedback"><span class="mark"></span> 聊天只做一次「输入 → 输出」；代理把过程循环起来并能观察结果再决定下一步。 <a href="#sec-why">回看：为什么叫代理</a></div></div></div>
-<div class="callout"><span class="co-label">本章小结</span><ul><li>代理循环 = while 循环：感知 → 决策 → 行动 → 观察。</li><li>能不能循环、有没有工具，是代理与聊天的分水岭。</li><li>结束方式：模型主动结束 / 达到上限 / 用户打断。</li></ul></div><div class="prevnext" id="prevNext"></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>代理循环 = while 循环：感知 → 决策 → 行动 → 观察。</li><li>能不能循环、有没有工具，是代理与聊天的分水岭。</li><li>结束方式：模型主动结束 / 达到上限 / 用户打断。</li></ul></div>
+<div class="myth-list"><div class="myth-item"><span class="mx">✗ 误区：</span>以为代理循环会无限跑下去<br><span class="mok">✓ 真相：</span><span class="truth">它有终止条件：模型主动结束、步数/token 上限、用户打断。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>以为每次循环都必须调用工具<br><span class="mok">✓ 真相：</span><span class="truth">每一步由模型决定：可以说普通文本直接结束，也可以调用工具继续。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>以为「代理」=「用了大模型的程序」<br><span class="mok">✓ 真相：</span><span class="truth">判断标准是有没有「感知 → 决策 → 行动 → 观察」的循环，而不是用没用模型。</span></div></div>
+<details class="challenge"><summary>动手挑战</summary><p class="ch-task">读一遍 <code>agent_loop.py</code>：把 <code>mock_model</code> 改成第一次就返回普通文本，观察输出；再改成永远返回工具调用，观察上限怎么兜底。</p><details class="ch-hint"><summary>提示 / 参考答案思路</summary><p>这能直观验证「终止条件」——第 3 章的 while 不是无限循环。</p></details></details><div class="prevnext" id="prevNext"></div>
 </div></main>
 </div>
 <footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
