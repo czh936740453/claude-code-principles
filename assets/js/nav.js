@@ -169,6 +169,9 @@
       ticks[i].textContent = isDone ? "\u2713" : "";
       ticks[i].classList.toggle("done", isDone);
     }
+
+    /* 通知首页「章节多面体」刷新颜色（仅首页监听） */
+    try { window.dispatchEvent(new CustomEvent("cc:progress")); } catch (e) {}
   }
 
   /* ---------- 侧边栏 ---------- */

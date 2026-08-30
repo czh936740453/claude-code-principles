@@ -344,6 +344,16 @@ def build_home():
         'aria-label="站内搜索">'
         '</div><div id="searchResults" class="search-results"></div>'
     )
+    poly_section = (
+        '<section class="poly-section" aria-label="章节多面体">'
+        '<div class="section-head"><h2>章节多面体</h2><span class="en">DRAG TO ROTATE · CLICK A FACE</span></div>'
+        '<p class="poly-sub">十个面对应十章：完成的章节点亮成彩色，还没学的保持灰色。拖动旋转，点击任意面直接进入对应章节。</p>'
+        '<div class="poly-hint"><span>拖动旋转</span><span>点击任意面进入章节</span><span>完成 = 彩色 · 未完成 = 灰色</span></div>'
+        '<div class="poly-scene" id="polyScene">'
+        '<div class="poly-spin" id="polySpin"><div class="poly" id="poly"></div></div>'
+        '</div>'
+        '</section>'
+    )
     path_steps = "".join(
         f'<div class="path-step"><span class="pn">Part {p["n"]}</span><b>{esc(p["title"])}</b>'
         f'<span>{esc(p["sub"])}</span></div>' for p in PARTS)
@@ -369,6 +379,8 @@ def build_home():
         '<p class="sub">用大白话讲清楚终端里的 AI 编程代理到底是怎么工作的：'
         "从一次对话的数据流，到代理循环、工具系统、权限安全、上下文管理，再到怎么读源码、怎么动手复刻。</p>"
         f"{progress}{search}{search_data}</section>"
+        f"{poly_section}"
+        '<script src="assets/js/poly.js"></script>'
         '<div class="content-inner" style="max-width:820px;padding-top:8px">'
         f'<div class="path-steps">{path_steps}</div>'
         '<div class="section-head"><h2>章节索引</h2><span class="en">10 CHAPTERS · 4 PARTS</span></div>'
