@@ -25,9 +25,9 @@
   function dims() {
     var s = window.getComputedStyle(scene);
     return {
-      w: parseFloat(s.getPropertyValue("--pf-w")) || 112,
-      h: parseFloat(s.getPropertyValue("--pf-h")) || 200,
-      r: parseFloat(s.getPropertyValue("--pf-r")) || 176
+      w: parseFloat(s.getPropertyValue("--pf-w")) || 150,
+      h: parseFloat(s.getPropertyValue("--pf-h")) || 235,
+      r: parseFloat(s.getPropertyValue("--pf-r")) || 290
     };
   }
 
