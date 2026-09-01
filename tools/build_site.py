@@ -11,6 +11,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CODE_DIR = ROOT / "assets" / "code"
 
+# 进阶篇内容数据（tools/advdata.py，与本站同目录）
+try:
+    from advdata import ADV_PAGES, ADV_BLOCKS
+except Exception:
+    ADV_PAGES, ADV_BLOCKS = [], {}
+
 def esc(s):
     return html.escape(str(s), quote=False)
 
@@ -422,6 +428,7 @@ def topbar(prefix, active):
         ("index.html", "nav-home", "首页"),
         ("docs/ch01.html", "nav-ch", "章节"),
         ("docs/ext-ah.html", "nav-ext", "拓展"),
+        ("docs/ext-adv1.html", "nav-adv", "进阶"),
         ("glossary.html", "nav-glossary", "术语表"),
         ("toolbox.html", "nav-toolbox", "代码库"),
         ("about.html", "nav-about", "关于"),
@@ -559,7 +566,9 @@ def build_home():
             + [{"num": "拓", "title": "拓展篇 · Agent 与 Harness",
                 "summary": "把十章串成两个上层概念：Agent 是什么、Harness 怎么把大脑手脚门卫记忆装成整机。",
                 "keywords": "agent harness 代理外壳 子代理 subagent workflow 记忆 memory mcp hooks 多代理 拓展",
-                "path": "docs/ext-ah.html"}],
+                "path": "docs/ext-ah.html"}]
+            + [{"num": p["tag"], "title": "进阶篇 · " + p["title"], "summary": p["summary"],
+                "keywords": p["keywords"], "path": "docs/" + p["id"] + ".html"} for p in ADV_PAGES],
             ensure_ascii=False)
         + ";</script>"
     )
@@ -582,10 +591,21 @@ def build_home():
         '<b>Agent 与 Harness（代理外壳）</b>'
         '<span>把十章内容串成两个上层概念：Agent 是什么、Harness 怎么把「大脑 + 手脚 + 门卫 + 记忆」'
         '装成整机。附一个可运行的迷你 Harness 代码。</span></a></div>'
+        '<div class="section-head"><h2>进阶阅读 · 开源 Agent 实战</h2>'
+        '<span class="en">ADVANCED · REAL OPEN-SOURCE</span></div>'
+        '<div class="chapter-grid">'
+        + "".join(
+            '<a class="ch-card" href="docs/' + p["id"] + '.html">'
+            + '<span class="cn">' + p["tag"] + ' · 进阶篇</span>'
+            + "<b>" + esc(p["title"]) + "</b>"
+            + "<span>" + esc(p["summary"]) + "</span></a>"
+            for p in ADV_PAGES)
+        + '</div>'
         '<div class="callout"><span class="co-label">怎么学效果最好</span>'
         "建议按顺序从第 1 章读到第 10 章：前两章建立整体认知，中间四章是核心机制，"
         "接着是外围系统，最后两章带你读源码和动手复刻。每章末尾有自测题和可运行的封装代码。"
-        "学完十章后，推荐再看「拓展篇 · Agent 与 Harness」，把概念串成整机。</div>"
+        "学完十章后，推荐再看「拓展篇 · Agent 与 Harness」把概念串成整机；"
+        "想继续深入，就进「进阶篇 · 开源 Agent 实战」精读真实框架的循环代码。</div>"
         "</div>"
     )
     return page_shell("首页 · 学习目录", "Claude Code 基本原理的自学图解站", body, "index", "", "nav-home", with_sidebar=False)
@@ -621,12 +641,19 @@ GLOSSARY = [
     ("Memory", "记忆", "Harness 给模型配的短期（上下文）与长期（CLAUDE.md、会话文件）记忆。", "ext-ah", "拓", "sec-memory"),
     ("Hook", "钩子", "在固定时机（如工具调用前后）触发外部脚本的机制，让 Harness 行为可编程。", "ext-ah", "拓", "sec-hooks"),
     ("MCP", "模型上下文协议", "接入外部工具 / 数据源的标准协议，相当于 Harness 的「万能插口」。", "ext-ah", "拓", "sec-hooks"),
+    ("Runner.run", "官方循环入口", "openai-agents-python 把整个代理循环封装在 Runner.run(agent, input) 里：调用 → 出现最终输出终止 → handoff → 工具调用再循环。", "ext-adv1", "进", "sec-styles"),
+    ("ReAct", "推理 + 行动", "Reasoning + Acting：先想再做的范式；smolagents 的 step() 一步一 ReAct，返回 None 继续、返回答案结束。", "ext-adv2", "进", "sec-smol"),
+    ("Handoff", "任务交接", "主 Agent 把任务转交给另一个 Agent，多智能体协作的四种模式之一。", "ext-adv3", "进", "sec-multi"),
+    ("RAG", "检索增强生成", "不把所有文档塞进上下文，而是按需检索相关片段再注入（检索 + 注入两步）。", "ext-adv3", "进", "sec-memory"),
+    ("Guardrail", "护栏", "在输入进模型前、工具调用前、输出给用户前分别检查的三道防线。", "ext-adv3", "进", "sec-guardrail"),
+    ("Trace / Eval", "可观测与评测", "Trace 记录每一步（输入、输出、工具调用、耗时）；Eval 用固定测试集量化成功率等指标。", "ext-adv3", "进", "sec-obs"),
+    ("Prompt Injection", "提示注入", "攻击者把恶意指令写进外部内容（文件 / 网页），Agent 读到后可能照做；靠「不可信数据 + 权限确认」防御。", "ext-adv3", "进", "sec-guardrail"),
 ]
 
 def build_glossary():
     items = []
     for term, zh, desc, ch_id, num, anchor in GLOSSARY:
-        label = f"第 {num} 章 →" if num.isdigit() else "拓展篇 →"
+        label = f"第 {num} 章 →" if num.isdigit() else ("进阶篇 →" if num == "进" else "拓展篇 →")
         items.append(
             '<div class="glossary-term"><div class="gt-head">'
             f"<code>{esc(term)}</code><b>{esc(zh)}</b>"
@@ -704,6 +731,22 @@ def build_toolbox():
          "page": "docs/ext-ah.html",
          "desc": "迷你 Agent Harness：把大脑（模型）+ 手脚（工具）+ 门卫（权限）+ 记忆（会话）串成一个可运行的最小脚手架，正文第 2–8 章一次串起来。",
          "run": ["python harness.py"]},
+        {"file": "choose_framework.py", "ch": "adv", "ch_num": "进", "ch_title": "开源 Agent 框架全景",
+         "page": "docs/ext-adv1.html",
+         "desc": "开源框架选型小助手：回答几个 y/n 问题，按「你的情况」推荐最合适的入手框架。",
+         "run": ["python choose_framework.py"]},
+        {"file": "mini_react_agent.py", "ch": "adv", "ch_num": "进", "ch_title": "精读真实代码 · ReAct 循环",
+         "page": "docs/ext-adv2.html",
+         "desc": "约 40 行的 ReAct 循环：想 → 做 → 看 → 再想，演示终止条件与 max_steps 保护。",
+         "run": ["python mini_react_agent.py"]},
+        {"file": "mini_multi_agent.py", "ch": "adv", "ch_num": "进", "ch_title": "协作、记忆与安全",
+         "page": "docs/ext-adv3.html",
+         "desc": "三角色（研究员 / 程序员 / 评审）流水线：后一个 Agent 吃前一个的输出。",
+         "run": ["python mini_multi_agent.py"]},
+        {"file": "mini_guardrail.py", "ch": "adv", "ch_num": "进", "ch_title": "协作、记忆与安全",
+         "page": "docs/ext-adv3.html",
+         "desc": "三道护栏演示：输入护栏、工具护栏、输出护栏分别怎么拦截危险内容。",
+         "run": ["python mini_guardrail.py"]},
     ]
     cards = []
     for m in modules:
@@ -713,7 +756,8 @@ def build_toolbox():
             '<div class="tc-head">'
             f'<code>{esc(m["file"])}</code>'
             + f'<a class="tc-ch" href="{m.get("page", "docs/" + m["ch"] + ".html")}">'
-            + (f'第 {m["ch_num"]} 章 · ' if str(m["ch_num"]).isdigit() else "拓展篇 · ")
+            + (f'第 {m["ch_num"]} 章 · ' if str(m["ch_num"]).isdigit()
+               else ("进阶篇 · " if str(m["ch_num"]) == "进" else "拓展篇 · "))
             + f'{esc(m["ch_title"])} →</a>'
             f'</div><p class="tc-desc">{esc(m["desc"])}</p>'
             f'<div class="runsteps">运行：{run}</div>'
@@ -731,6 +775,7 @@ def build_toolbox():
         '<option value="ch06">第 06 章</option><option value="ch07">第 07 章</option>'
         '<option value="ch08">第 08 章</option><option value="ch10">第 10 章</option>'
         '<option value="ext">拓展篇</option>'
+        '<option value="adv">进阶篇</option>'
         "</select>"
         '<input id="toolFilterText" type="text" placeholder="输入关键词筛选…" aria-label="按关键词筛选">'
         "</div>"
@@ -751,6 +796,9 @@ def build_about():
         "8 个未发布特性、26 个隐藏命令、32 个构建开关、120+ 环境变量等。</li>"
         "<li><a href=\"https://github.com/ultraworkers/claw-code\">ultraworkers/claw-code</a> —— 用 Rust 重实现的 "
         "Claude Code CLI 移植项目，作为「如何复刻」的对照样例。</li>"
+        "<li>进阶篇精读的开源项目：<a href=\"https://github.com/openai/openai-agents-python\">openai-agents-python</a>、"
+        "<a href=\"https://github.com/huggingface/smolagents\">smolagents</a>、langgraph、crewAI、autogen、MetaGPT、AutoGPT、"
+        "pydantic-ai 等，均为 GitHub 公开仓库，仅供学习其公开代码与原理。</li>"
         "</ul>"
         '<h2 id="s2"><span class="h2-num">/</span>免责声明</h2>'
         "<p>本站内容基于上述公开资料的整理与学习用途的再解读，<strong>信息可能不准确或已过时</strong>。"
@@ -763,6 +811,7 @@ def build_about():
         "<li>代码库模块为 Python 3 零依赖实现，复制或下载即可运行。</li>"
         "<li>「问 Codex」窗口通过本机桥接服务调用本机 Codex CLI（只读沙箱），问题与回答仅在本机流转。</li>"
         "<li>「拓展篇 · Agent 与 Harness」独立于 10 章正文，用于把十章内容串成 Agent / Harness 两个上层概念，并附可运行的迷你 Harness 代码。</li>"
+        "<li>「进阶篇 · 开源 Agent 实战」精读 openai-agents-python、smolagents、claw-code 等真实开源项目的循环实现（Runner.run / ReAct step / Rust 子代理编排），并附 4 个可运行的迷你代码模块。</li>"
         "</ul>"
         '<h2 id="s4"><span class="h2-num">/</span>致谢</h2>'
         "<p>感谢 ccleaks 的资料整理与 claw-code 的开源移植，为中文自学者提供了难得的学习素材。</p>"
@@ -1437,7 +1486,11 @@ EXT_BLOCKS = [
 ]
 
 # ================= 构建入口 =================
-def build_ext():
+def build_adv_pages():
+    """生成拓展篇（ext-ah）与进阶篇（ext-adv1..3）页面，返回 [(html, 文件名), ...]。"""
+    pages = []
+
+    # ---- 拓展篇 · Agent 与 Harness（原有内容） ----
     hero = (
         '<div class="hero"><span class="watermark">拓</span>'
         '<div class="chapter-tag">EXTENSION · PART 5 · AGENT & HARNESS</div>'
@@ -1447,10 +1500,28 @@ def build_ext():
     )
     body = hero + render_blocks(EXT_BLOCKS, "拓")
     body += '<div class="prevnext" id="prevNext"></div>'
-    return page_shell(
+    pages.append((page_shell(
         "拓展篇 · Agent 与 Harness",
         "Agent 与 Harness（代理外壳）拓展阅读",
-        body, "ext-ah", "../", "nav-ext")
+        body, "ext-ah", "../", "nav-ext"), "ext-ah.html"))
+
+    # ---- 进阶篇 · 开源 Agent 实战（进·1 / 进·2 / 进·3） ----
+    for p in ADV_PAGES:
+        hero = (
+            '<div class="hero"><span class="watermark">{tag}</span>'
+            '<div class="chapter-tag">ADVANCED · {sub}</div>'
+            "<h1>进阶篇 · {title}</h1>"
+            '<p class="goal">{goal}</p></div>'
+        ).format(tag=esc(p["tag"]), sub=esc(p["sub"]),
+                 title=esc(p["title"]), goal=esc(p["goal"]))
+        body = hero + render_blocks(ADV_BLOCKS[p["id"]], "进")
+        body += '<div class="prevnext" id="prevNext"></div>'
+        pages.append((page_shell(
+            "进阶篇 · " + p["title"],
+            p["summary"],
+            body, p["id"], "../", "nav-adv"), p["id"] + ".html"))
+
+    return pages
 
 def render_chapter(ch):
     part = next(p for p in PARTS if p["n"] == ch["part"])
@@ -1486,8 +1557,9 @@ def main():
     (ROOT / "toolbox.html").write_text(build_toolbox(), encoding="utf-8")
     (ROOT / "about.html").write_text(build_about(), encoding="utf-8")
     build_docs()
-    (ROOT / "docs" / "ext-ah.html").write_text(build_ext(), encoding="utf-8")
-    print("OK: 已生成 index / glossary / toolbox / about、docs/ch01..ch10 与 docs/ext-ah.html")
+    for html, name in build_adv_pages():
+        (ROOT / "docs" / name).write_text(html, encoding="utf-8")
+    print("OK: 已生成 index / glossary / toolbox / about、docs/ch01..ch10 与 docs/ext-ah.html、docs/ext-adv1..3.html")
 
 if __name__ == "__main__":
     main()

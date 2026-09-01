@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>进阶篇 · 开源 Agent 框架全景 — Claude Code 原理图解</title>
+<meta name="description" content="9 个真实开源框架的全景对比：函数式 Runner、代码即行动、图编排、角色协作…… 学完你会知道该从哪个入手。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ext-adv1">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch" href="../docs/ch01.html">章节</a><a class="nav-ext" href="../docs/ext-ah.html">拓展</a><a class="nav-adv active" href="../docs/ext-adv1.html">进阶</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">进·1</span><div class="chapter-tag">ADVANCED · FRAMEWORK SURVEY</div><h1>进阶篇 · 开源 Agent 框架全景</h1><p class="goal">站在 GitHub 上真实开源项目的肩膀上，看清主流 Agent 框架长什么样、各自怎么组织循环，学会「先全景、再精读」。</p></div><h2 id="sec-why"><span class="h2-num">进 /</span>为什么读开源代码</h2>
+<p>第 1–10 章把原理讲透了，但原理只是「骨架」。真实框架是「血肉」：同一个代理循环，不同项目做出了完全不同的产品。读开源代码，就是看别人怎么把骨架做成能用的东西。</p>
+<ul><li><strong>原理落地</strong>：在真实项目里看到 <code>while</code> 循环、工具注册表、权限检查长什么样</li><li><strong>对比思维</strong>：同一件事有 4 种做法，横向对比最涨功力</li><li><strong>追新能力</strong>：新框架往往最先实现最新论文里的机制</li></ul>
+<div class="callout tip"><span class="co-label">一句话</span>读开源代码不是为了抄，是为了看别人怎么踩坑、怎么解决，然后长出你自己的判断力。</div>
+<h2 id="sec-map"><span class="h2-num">进 /</span>九个真实框架全景</h2>
+<p>下表数据抓取自 GitHub 仓库元数据（星标为约数、会随时间变化，仅作热度参考）。</p>
+<table><thead><tr><th>项目</th><th>语言</th><th>星标≈</th><th>一句话定位</th><th>循环风格</th></tr></thead><tbody><tr><td>openai/openai-agents-python</td><td>Python</td><td>2.9 万</td><td>官方 SDK：轻量、面向多智能体工作流</td><td>函数式 Runner.run</td></tr><tr><td>huggingface/smolagents</td><td>Python</td><td>2.9 万</td><td>极简：让 Agent 用代码思考</td><td>代码即行动（CodeAgent）</td></tr><tr><td>langchain-ai/langgraph</td><td>Python</td><td>4.1 万</td><td>把 Agent 画成有状态的图</td><td>图编排（节点 + 边）</td></tr><tr><td>crewAIInc/crewAI</td><td>Python</td><td>5.8 万</td><td>角色扮演式多智能体协作</td><td>角色分工 + 任务队列</td></tr><tr><td>microsoft/autogen</td><td>Python</td><td>6.1 万</td><td>多智能体对话框架</td><td>智能体互相发消息</td></tr><tr><td>FoundationAgents/MetaGPT</td><td>Python</td><td>7.0 万</td><td>多智能体「软件公司」流水线</td><td>SOP 角色流水线</td></tr><tr><td>Significant-Gravitas/AutoGPT</td><td>Python</td><td>18.7 万</td><td>经典自主代理实验</td><td>目标驱动 while 循环</td></tr><tr><td>pydantic/pydantic-ai</td><td>Python</td><td>2.0 万</td><td>类型安全：全程类型化</td><td>数据模型驱动</td></tr><tr><td>ultraworkers/claw-code</td><td>Rust</td><td>19.5 万</td><td>Claude Code 的 Rust 重实现</td><td>顺序多子代理编排</td></tr></tbody></table>
+<div class="callout warn"><span class="co-label">注意</span>星标只是热度参考，不是质量评分。选框架要看「文档完整度、维护活跃度、社区生态」，比看星标更靠谱。</div>
+<h2 id="sec-styles"><span class="h2-num">进 /</span>四种「循环风格」</h2>
+<p>框架看着多，核心差异其实只有一个：<strong>它怎么组织「感知 → 决策 → 行动 → 观察」这个循环</strong>。记住第 3 章的循环，你就拿到了看穿所有框架的「透视镜」。</p>
+<h3 id="h1">① 函数式 Runner：你调用，它循环</h3>
+<p>openai-agents-python 把整个循环封装进一个函数 <code>Runner.run(agent, input)</code>。你只管描述「哪个 Agent + 什么输入」，循环由 SDK 内部跑完，直到出现最终输出或达到最大轮数。</p>
+<figure class="codeblock" data-lang="text"><pre class="codebody"><code>result = await Runner.run(starting_agent=agent, input="帮我写一个 hello.py")
+# SDK 内部（官方注释版）：
+#   1. 调用 Agent
+#   2. 有最终输出？→ 结束
+#   3. 有 handoff？→ 换 Agent 再跑
+#   4. 否则执行工具调用，然后回到第 1 步</code></pre></figure>
+<h3 id="h2">② 代码即行动：让模型直接写代码</h3>
+<p>smolagents 的 CodeAgent 不让模型挑工具，而是让模型<strong>直接写 Python 代码</strong>，SDK 负责执行。循环 = 模型写代码 → 执行 → 把输出放回上下文 → 再写。代码本身就是「行动」。</p>
+<h3 id="h3">③ 图编排：把循环画成一张图</h3>
+<p>LangGraph 把状态转移画成图：节点 = 要做的动作，边 = 转移条件。循环就是沿着边走，还支持条件分支、人工介入、随时查看中间状态。</p>
+<h3 id="h4">④ 角色协作：循环与循环互相配合</h3>
+<p>CrewAI / AutoGen / MetaGPT 把一个循环升级成多个循环协作：不同角色（研究员、程序员、评审）各自跑自己的循环，把结果传给下一个人。</p>
+<h2 id="sec-choice"><span class="h2-num">进 /</span>该从哪个入手</h2>
+<table><thead><tr><th>你的情况</th><th>推荐</th><th>理由</th></tr></thead><tbody><tr><td>第一次写 Agent</td><td>smolagents</td><td>代码最少，概念最直白</td></tr><tr><td>想用官方 API</td><td>openai-agents-python</td><td>官方维护，文档最全</td></tr><tr><td>要可控、可可视化</td><td>LangGraph</td><td>图直观，状态可查</td></tr><tr><td>要做多角色协作</td><td>CrewAI / AutoGen</td><td>开箱即用</td></tr><tr><td>想对照本站原理</td><td>claw-code</td><td>和十章内容一一对应</td></tr></tbody></table>
+<div class="callout tip"><span class="co-label">学习顺序</span>先「精读一个」再「横向对比」。本站「进·2」带你精读三个真实循环，建议读完再来选型。</div>
+<h2 id="sec-lab"><span class="h2-num">进 /</span>代码实验室</h2>
+<p>一个零依赖小助手：回答几个问题，帮你打分推荐最合适的框架。</p>
+<figure class="codeblock" data-file="choose_framework.py" data-lang="python"><pre class="codebody"><code># -*- coding: utf-8 -*-
+"""choose_framework.py —— 开源 Agent 框架选型小助手（零依赖）
+
+进阶篇 · 进·1 的配套代码：
+回答几个 y/n 问题，根据「你的情况」推荐最合适的开源框架。
+原理对照：进·1 的「该从哪个入手」选型表。
+"""
+from __future__ import print_function
+
+
+def ask(question):
+    """问一个 y/n 问题，循环直到用户给出合法回答。"""
+    while True:
+        ans = input(question + " (y/n) ").strip().lower()
+        if ans in ("y", "n", "yes", "no"):
+            return ans.startswith("y")
+
+
+def recommend(answers):
+    """根据回答字典返回 (推荐框架, 理由)。
+
+    answers 形如 {"first": bool, "official": bool, "control": bool, "multi": bool, "learn": bool}
+    """
+    # 从上到下命中第一条，顺序即优先级
+    if answers.get("learn"):
+        return "smolagents", "你想对照本站原理学习 → smolagents 代码最少、概念最直白"
+    if answers.get("first"):
+        return "smolagents", "第一次写 Agent → 从代码最少的开始，最容易建立直觉"
+    if answers.get("official"):
+        return "openai-agents-python", "想用官方 API → 官方维护、文档最全、生态最稳"
+    if answers.get("control"):
+        return "langgraph", "要可控、可可视化 → 把循环画成图，状态一目了然"
+    if answers.get("multi"):
+        return "crewAI / autogen", "要做多角色协作 → 开箱即用的角色分工与对话协商"
+    return "claw-code", "想对照本站十章原理 → 它是 Claude Code 的 Rust 重实现"
+
+
+def main():
+    print("=" * 56)
+    print("开源 Agent 框架选型助手")
+    print("回答几个问题，帮你找到合适的入手框架。")
+    print("=" * 56)
+
+    answers = {
+        "first":    ask("Q1 你是第一次写 Agent 吗？"),
+        "official": ask("Q2 你希望用官方维护的 SDK 吗？"),
+        "control":  ask("Q3 你需要把流程可视化、可精确控制吗？"),
+        "multi":    ask("Q4 你的任务需要多个角色协作吗？"),
+        "learn":    ask("Q5 你想对照本站原理（Claude Code）学习吗？"),
+    }
+
+    name, reason = recommend(answers)
+    print()
+    print("推荐：", name)
+    print("理由：", reason)
+    print()
+    print("下一步：去 GitHub 搜对应仓库，读 README 第一个示例，"
+          "找到它的「入口函数」（Runner.run / Agent.run / main）。")
+
+
+if __name__ == "__main__":
+    main()
+</code></pre></figure>
+<p>运行步骤：保存为 <code>choose_framework.py</code>，执行 <code>python choose_framework.py</code>，按提示回答 y / n。</p>
+<div class="quiz"><div class="quiz-item" data-answer="A"><p class="quiz-q">1. openai-agents-python 的核心入口是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. Runner.run</button><button type="button" data-opt="B">B. main()</button><button type="button" data-opt="C">C. while True</button><button type="button" data-opt="D">D. agent.step</button></div><div class="quiz-feedback"><span class="mark"></span> 整个循环被封装在 Runner.run(agent, input) 里。 <a href="#sec-styles">回看：函数式 Runner</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">2. 哪种循环风格让模型直接生成代码作为行动？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 函数式</button><button type="button" data-opt="B">B. 代码即行动</button><button type="button" data-opt="C">C. 图编排</button><button type="button" data-opt="D">D. 角色协作</button></div><div class="quiz-feedback"><span class="mark"></span> smolagents 的 CodeAgent 让模型直接写 Python 代码。 <a href="#sec-styles">回看：代码即行动</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">3. LangGraph 的核心抽象是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 角色</button><button type="button" data-opt="B">B. 图（节点 + 边）</button><button type="button" data-opt="C">C. 对话</button><button type="button" data-opt="D">D. 任务队列</button></div><div class="quiz-feedback"><span class="mark"></span> 它把状态转移画成图，循环就是沿着边走。 <a href="#sec-styles">回看：图编排</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">4. 关于 GitHub 星标数，正确的是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 越高代表框架越好</button><button type="button" data-opt="B">B. 只是热度参考</button><button type="button" data-opt="C">C. 决定框架质量</button><button type="button" data-opt="D">D. 与学习价值完全无关</button></div><div class="quiz-feedback"><span class="mark"></span> 星标是热度不是质量；选型看文档、维护与生态。 <a href="#sec-map">回看：九个真实框架全景</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>读开源代码 = 看别人怎么把同一个骨架做成产品</li><li>9 个真实框架、4 种循环风格：函数式 / 代码即行动 / 图编排 / 角色协作</li><li>星标是热度不是质量；选型看文档、维护、生态</li><li>先精读一个再横向对比（本站「进·2」带读三个）</li></ul></div>
+<div class="myth-list"><div class="myth-item"><span class="mx">✗ 误区：</span>星标最多的框架一定最好<br><span class="mok">✓ 真相：</span><span class="truth">星标只是热度参考，选型要看文档完整度、维护活跃度与社区生态。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>学 Agent 必须从最复杂的框架开始<br><span class="mok">✓ 真相：</span><span class="truth">新手从 smolagents 这类「代码最少」的开始，更容易建立直觉。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>框架之间差异巨大、互不相通<br><span class="mok">✓ 真相：</span><span class="truth">它们只是同一套「感知 → 决策 → 行动 → 观察」循环的不同组织方式。</span></div></div>
+<details class="challenge"><summary>动手挑战</summary><p class="ch-task">打开 GitHub，任选本页两个框架，分别找到它们的「入口函数」（Runner.run / Agent.run / main），各写一句话说明这个入口接收什么、返回什么。</p><details class="ch-hint"><summary>提示 / 参考答案思路</summary><p>入口一般都在 README 的第一个示例里；重点看「输入 → 输出」，不要纠结内部细节。</p></details></details><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+<button id="codexFab" class="codex-fab" type="button" aria-label="问 Codex"><span class="fab-ico">&gt;_</span><span class="fab-txt">问 Codex</span></button>
+<aside id="codexChat" class="codex-chat" role="dialog" aria-label="问 Codex 直连窗口"><div class="codex-head"><b>&gt;_ Codex</b><span id="codexStatus" class="codex-status connecting">连接中…</span><button id="codexClose" type="button" aria-label="关闭">×</button></div><div id="codexMessages" class="codex-msgs"></div><div id="codexChips" class="codex-chips"><button type="button">代理循环是怎么转起来的？</button><button type="button">tool_use 是什么？</button><button type="button">YOLO 权限怎么分级？</button><button type="button">上下文被占满会怎样？</button></div><div class="codex-input"><textarea id="codexInput" rows="1" placeholder="向本机 Codex 提问…（只读沙箱）"></textarea><button id="codexSend" type="button">发送</button></div></aside>
+<script src="../assets/js/codex-chat.js"></script>
+</body>
+</html>

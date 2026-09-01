@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>进阶篇 · 精读真实代码：三个 Agent 循环 — Claude Code 原理图解</title>
+<meta name="description" content="三份真实代码精读：Runner.run 的官方循环注释、smolagents 的 ReAct step、claw-code 的 Rust 顺序子代理循环。">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/style.css">
+<script>(function(){try{var t=localStorage.getItem('cc_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
+</head>
+<body data-page="ext-adv2">
+<div class="scrim"></div>
+<header class="topbar"><button id="hamburger" class="tb-item hamburger" aria-label="打开目录">☰</button><a class="brand" href="../index.html"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1e1e1e"/><rect x="14" y="16" width="36" height="32" rx="5" fill="none" stroke="#f5f5f5" stroke-width="3"/><circle cx="44" cy="21" r="2.4" fill="#f5f5f5"/><text x="23" y="39" font-family="Consolas, monospace" font-size="17" font-weight="bold" fill="#f5f5f5">&gt;_</text></svg>Claude Code 原理图解</a><nav><a class="nav-home" href="../index.html">首页</a><a class="nav-ch" href="../docs/ch01.html">章节</a><a class="nav-ext" href="../docs/ext-ah.html">拓展</a><a class="nav-adv active" href="../docs/ext-adv1.html">进阶</a><a class="nav-glossary" href="../glossary.html">术语表</a><a class="nav-toolbox" href="../toolbox.html">代码库</a><a class="nav-about" href="../about.html">关于</a></nav><span class="spacer"></span><span class="tb-progress"><span class="tb-txt">0 / 10</span><span class="bar"><i></i></span></span><button class="tb-item" data-fontbtn="0" aria-label="小字号">A-</button><button class="tb-item" data-fontbtn="1" aria-label="中字号">A</button><button class="tb-item" data-fontbtn="2" aria-label="大字号">A+</button><button id="themeToggle" class="tb-item" aria-label="切换深浅色">☾</button></header>
+<div class="layout">
+<aside class="sidebar"><nav id="sidebarNav"></nav></aside>
+<main class="content"><div class="content-inner">
+<div class="hero"><span class="watermark">进·2</span><div class="chapter-tag">ADVANCED · CODE READING</div><h1>进阶篇 · 精读真实代码：三个 Agent 循环</h1><p class="goal">把第 3 章的「代理循环」放到真实代码里：精读 OpenAI Agents SDK、smolagents、claw-code 三个项目的循环实现，逐句看懂。</p></div><h2 id="sec-how"><span class="h2-num">进 /</span>读代码的正确姿势</h2>
+<p>别一上来就逐行读。三步走：<strong>先找入口 → 再找循环 → 最后追数据</strong>。</p>
+<ol><li><strong>找入口</strong>：程序从哪开始？（<code>Runner.run</code> / <code>agent.run</code> / <code>main</code>）</li><li><strong>找循环</strong>：哪个 <code>while</code> / <code>for</code> / <code>step</code> 在反复执行？</li><li><strong>追数据</strong>：messages / context / 记忆是怎么一步步被改写的？</li></ol>
+<div class="callout tip"><span class="co-label">心法</span>读代码读到「哦，这就是第 3 章那个循环」就成功了，其余细节可以之后再补。</div>
+<h2 id="sec-sdk"><span class="h2-num">进 /</span>精读 ① OpenAI Agents SDK：Runner.run</h2>
+<p>openai-agents-python 的循环几乎没「藏起来」——它的文档注释直接写清了循环长什么样。下面这段来自官方仓库 <code>src/agents/run.py</code> 的 <code>Runner.run</code> 注释：</p>
+<figure class="codeblock" data-lang="text"><pre class="codebody"><code>The agent will run in a loop until a final output is generated. The loop runs like so:
+  1. The agent is invoked with the given input.
+  2. If there is a final output (i.e. the agent produces something of type
+     `agent.output_type`), the loop terminates.
+  3. If there's a handoff, we run the loop again, with the new agent.
+  4. Else, we run tool calls (if any), and re-run the loop.
+—— 摘自 openai/openai-agents-python · src/agents/run.py（注释节选）</code></pre></figure>
+<p>逐句对照第 3 章：</p>
+<table><thead><tr><th>官方注释</th><th>第 3 章概念</th><th>大白话</th></tr></thead><tbody><tr><td>第 1 步 invoke</td><td>感知 + 决策</td><td>把输入丢给模型，模型决定下一步</td></tr><tr><td>第 2 步 final output</td><td>终止条件</td><td>模型说「这是最终答案」就停</td></tr><tr><td>第 3 步 handoff</td><td>多智能体交接</td><td>把任务转交给另一个 Agent</td></tr><tr><td>第 4 步 tool calls + re-run</td><td>行动 + 观察</td><td>跑完工具，结果放回去，回到第 1 步</td></tr></tbody></table>
+<p>真实循环体比注释长得多（还塞了护栏、追踪、会话等），但骨架就是它。run.py 里核心就是这样的 <code>while</code>（下面为简化示意，非逐字摘录）：</p>
+<figure class="codeblock" data-lang="python"><pre class="codebody"><code>            while True:
+                # ... 护栏检查（guardrails）、会话、追踪等外层逻辑 ...
+                result = await handle_single_turn(current_agent, ...)
+
+                if result.next_step == NextStepFinalOutput:
+                    break          # 终止条件：出现最终输出
+                # 否则：执行工具调用，结果写回，continue 回到循环头
+            # （简化示意：真实代码见 run.py 的 while True 循环体）</code></pre></figure>
+<div class="callout tip"><span class="co-label">别被生产代码吓到</span>一个能上生产的循环会塞进护栏、追踪、会话、重试……但核心永远是「while + 出口」。看懂骨架，再看细节就轻松了。</div>
+<h2 id="sec-smol"><span class="h2-num">进 /</span>精读 ② smolagents：一步一个 ReAct</h2>
+<p>smolagents 把「循环的一步」写成一个方法 <code>step()</code>，注释一句话就说清了 ReAct：</p>
+<figure class="codeblock" data-lang="python"><pre class="codebody"><code>    def step(self, memory_step: ActionStep) -&gt; Any:
+        """
+        Perform one step in the ReAct framework: the agent thinks, acts,
+        and observes the result.
+        Returns either None if the step is not final, or the final answer.
+        """
+        return list(self._step_stream(memory_step))[-1]
+—— 摘自 huggingface/smolagents · src/smolagents/agents.py（节选）</code></pre></figure>
+<p>解读三件事：</p>
+<ul><li><strong>返回值</strong>：返回 <code>None</code> = 还没结束、继续下一轮；返回答案 = 这是最后一步（这就是终止条件）</li><li><strong><code>_step_stream</code></strong>：一个生成器，一步步产出「思考 → 行动 → 观察」，<code>[-1]</code> 取最后一步</li><li><strong>ReAct = Reasoning + Acting</strong>：先想再做的范式，对应第 3 章的「决策 → 行动」</li></ul>
+<p>模型输出怎么变成动作？看它的 <code>extract_action</code>——把输出按分隔符拆成「思考 + 动作」：</p>
+<figure class="codeblock" data-lang="python"><pre class="codebody"><code>            split = model_output.split(split_token)
+            rationale, action = split[-2], split[-1]
+            # NOTE: 从后往前取，解决输出里出现多个分隔符的情况
+—— 摘自 smolagents · extract_action（节选）</code></pre></figure>
+<h2 id="sec-claw"><span class="h2-num">进 /</span>精读 ③ claw-code（Rust）：顺序子代理</h2>
+<p>claw-code 的 <code>agents</code> 子命令做的不是「一个循环」，而是<strong>多个子代理的顺序编排</strong>：把一个大任务拆给几个专用 Agent（如 audit / explain / implement），依次跑完。核心是这段 Rust：</p>
+<figure class="codeblock" data-lang="rust"><pre class="codebody"><code>    for (i, spec) in specs.into_iter().enumerate() {
+        println!("== Agent {} / {}: {} ==", i + 1, args.agent.len(), spec.name);
+        // ... 为每个 spec 组装配置：preset / permission / model / session ...
+
+        let run_res = run_one(cfg, &amp;mut buf).await;   // 跑一个完整 Agent 循环
+        match run_res {
+            Ok(()) =&gt; {
+                let summary = tail_chars(text.as_ref(), 1600);
+                println!("  result: OK");
+                // ... 输出该 Agent 的结果摘要，再进入下一个 spec
+            }
+            // ...
+        }
+    }
+—— 摘自 ultraworkers/claw-code · rust/crates/claw-analog/src/agents.rs（节选）</code></pre></figure>
+<p>解读：</p>
+<ul><li><code>specs.into_iter().enumerate()</code>：逐个取出 Agent 配置（名字、preset、权限、模型）</li><li><code>run_one(cfg, &amp;mut buf).await</code>：每个 Agent 内部都有一个完整的代理循环（就是第 3 章那个！），跑完把输出写进 buf</li><li><code>tail_chars(..., 1600)</code>：只保留结果尾部 1600 字符作为摘要，避免把完整输出都传给下一个环节</li></ul>
+<div class="callout tip"><span class="co-label">多智能体 = 多个循环 + 串起来</span>单个 Agent 的循环没变，变的是「循环之外」：谁先跑、结果传给谁、共享什么上下文。</div>
+<h2 id="sec-compare"><span class="h2-num">进 /</span>三循环对照表</h2>
+<table><thead><tr><th>维度</th><th>Agents SDK</th><th>smolagents</th><th>claw-code</th></tr></thead><tbody><tr><td>语言</td><td>Python</td><td>Python</td><td>Rust</td></tr><tr><td>循环载体</td><td>while True（内部）</td><td>step() / _step_stream</td><td>for spec（编排）+ 内部循环</td></tr><tr><td>感知</td><td>invoke with input</td><td>memory_step 上下文</td><td>base_session 继承</td></tr><tr><td>决策</td><td>模型输出 final / tool / handoff</td><td>模型输出 thought + action</td><td>每个 spec 的 prompt</td></tr><tr><td>行动</td><td>执行工具调用</td><td>执行生成的代码</td><td>跑子 Agent 循环</td></tr><tr><td>观察</td><td>工具结果回填</td><td>结果写回 memory</td><td>summary_tail 摘要</td></tr><tr><td>终止</td><td>final output / max_turns</td><td>final answer / max_steps</td><td>全部 spec 跑完</td></tr></tbody></table>
+<h2 id="sec-lab"><span class="h2-num">进 /</span>代码实验室</h2>
+<p>用纯 Python 实现一个约 40 行的 ReAct 循环：想 → 做 → 看 → 再想，最后输出答案。它同时演示了「解析动作」和「最大步数」两个概念。</p>
+<figure class="codeblock" data-file="mini_react_agent.py" data-lang="python"><pre class="codebody"><code># -*- coding: utf-8 -*-
+"""mini_react_agent.py —— 约 40 行的 ReAct 循环（零依赖）
+
+进阶篇 · 进·2 的配套代码：
+演示 smolagents 的 ReAct 范式：想（reason）→ 做（act）→ 看（observe）→ 再想……
+直到模型给出最终答案或达到最大步数。
+
+原理对照：
+- 循环 = 进·2 精读的 Runner.run / step() 骨架（感知 → 决策 → 行动 → 观察）
+- max_steps = smolagents 的最大步数保护
+"""
+from __future__ import print_function
+
+
+def fake_model(thought, step):
+    """模拟大模型：根据当前思考返回 (行动, 参数) 或 (None, 最终答案)。
+
+    真实项目里这里会调用 API；我们把「决策」固定下来，便于观察循环本身。
+    """
+    if step == 1:
+        return ("add", 1)          # 第一次：做加法
+    if step == 2:
+        return ("add", 2)          # 第二次：再加
+    return (None, "计算完成，结果是 3")  # 终止条件：模型给出最终答案
+
+
+def run(max_steps=10):
+    """一个最小 ReAct 循环：想 → 做 → 看 → 再想，直到结束。"""
+    thought = "用户让我算 0 + 1 + 2"
+    memory = []                    # 观察结果放回这里（相当于上下文）
+    result = None
+
+    for step in range(1, max_steps + 1):
+        print(f"[{step:02d}] 想：{thought}")
+
+        action, value = fake_model(thought, step)
+        if action is None:
+            result = value          # 终止条件：出现最终输出
+            break
+
+        # 做：执行动作（真实项目里这里是工具调用）
+        if action == "add":
+            current = memory[-1] if memory else 0
+            new_val = current + value
+            print(f"    做：调用工具 add({value}) → {new_val}")
+
+        # 看：把观察结果写回记忆，作为下一轮的上下文
+        memory.append(new_val)
+        thought = f"当前累计 {new_val}，继续下一步"
+        print(f"    看：结果已放回上下文，共 {len(memory)} 条观察")
+
+    if result is None:
+        print("警告：达到最大步数仍未得到最终答案（max_steps 保护生效）。")
+    else:
+        print()
+        print("最终答案：", result)
+
+
+if __name__ == "__main__":
+    run(max_steps=10)
+</code></pre></figure>
+<p>运行步骤：保存为 <code>mini_react_agent.py</code>，执行 <code>python mini_react_agent.py</code>。</p>
+<div class="quiz"><div class="quiz-item" data-answer="A"><p class="quiz-q">1. 按 Runner.run 的官方注释，循环的终止条件是什么？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 出现最终输出</button><button type="button" data-opt="B">B. 用户按 Ctrl+C</button><button type="button" data-opt="C">C. 工具全部执行完</button><button type="button" data-opt="D">D. 上下文占满</button></div><div class="quiz-feedback"><span class="mark"></span> 第 2 步：出现 final output 循环终止。 <a href="#sec-sdk">回看：精读 ①</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">2. smolagents 的 step() 返回什么表示「还没结束」？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 最终答案</button><button type="button" data-opt="B">B. None</button><button type="button" data-opt="C">C. 空字符串</button><button type="button" data-opt="D">D. 0</button></div><div class="quiz-feedback"><span class="mark"></span> 返回 None 说明不是最后一步，继续下一轮。 <a href="#sec-smol">回看：精读 ②</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">3. ReAct 中的 R 和 A 分别指？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 读取与行动</button><button type="button" data-opt="B">B. 推理与行动</button><button type="button" data-opt="C">C. 运行与异步</button><button type="button" data-opt="D">D. 记录与评估</button></div><div class="quiz-feedback"><span class="mark"></span> Reasoning + Acting：先想再做的范式。 <a href="#sec-smol">回看：精读 ②</a></div></div><div class="quiz-item" data-answer="B"><p class="quiz-q">4. claw-code 的 agents 命令本质上是？</p><div class="quiz-opts"><button type="button" data-opt="A">A. 单 Agent 循环</button><button type="button" data-opt="B">B. 顺序多子代理编排</button><button type="button" data-opt="C">C. 图编排</button><button type="button" data-opt="D">D. 对话协商</button></div><div class="quiz-feedback"><span class="mark"></span> 它把任务拆给多个专用 Agent 依次跑完。 <a href="#sec-claw">回看：精读 ③</a></div></div></div>
+<div class="callout"><span class="co-label">本章小结</span><ul><li>读代码三步：找入口 → 找循环 → 追数据</li><li>Agents SDK：循环藏在 Runner.run 里，官方注释就是「官方版伪代码」</li><li>smolagents：step() 一步一 ReAct，返回 None 继续、返回答案结束</li><li>claw-code：顺序子代理编排 = 多个循环 + 共享上下文串起来</li><li>三个循环本质相同：都是「感知 → 决策 → 行动 → 观察」</li></ul></div>
+<div class="myth-list"><div class="myth-item"><span class="mx">✗ 误区：</span>真实源码比教程复杂一百倍、肯定看不懂<br><span class="mok">✓ 真相：</span><span class="truth">骨架就是第 3 章的循环；生产代码只是加了护栏、追踪、会话这些「外层」。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>注释不重要，代码才重要<br><span class="mok">✓ 真相：</span><span class="truth">Agents SDK 的循环描述就写在注释里，官方注释是最优质的一手资料。</span></div><div class="myth-item"><span class="mx">✗ 误区：</span>多智能体 = 一套全新的循环<br><span class="mok">✓ 真相：</span><span class="truth">单个循环没变，变的是「循环之间怎么串」。</span></div></div>
+<details class="challenge"><summary>动手挑战</summary><p class="ch-task">打开 smolagents 仓库的 <code>src/smolagents/agents.py</code>，找到 <code>step</code> 和 <code>_step_stream</code>，数一数「思考 → 行动 → 观察」各出现在哪几行；再给 mini_react_agent.py 加一个 <code>max_steps</code> 参数，超限就打印警告。</p><details class="ch-hint"><summary>提示 / 参考答案思路</summary><p>用仓库搜索定位 <code>_step_stream</code>；mini_react_agent 里那个 for 循环就是 max_steps 的雏形，把固定值 10 改成参数即可。</p></details></details><div class="prevnext" id="prevNext"></div>
+</div></main>
+</div>
+<footer class="site-footer"><div class="inner"><p><strong>Claude Code 原理图解</strong> —— 面向自学的开源原理科普站。</p><p>内容基于 <a href="https://ccleaks.com/leaks">ccleaks.com/leaks</a> 的公开源码分析 与 <a href="https://github.com/ultraworkers/claw-code">ultraworkers/claw-code</a> 的 Rust 移植项目整理，仅供学习参考；信息可能不准确或已过时，请以官方文档为准。</p><p>本站不隶属于 Anthropic，与任何泄露源码无利益关系，仅作学习用途。© 2026</p></div></footer>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/main.js"></script>
+<button id="codexFab" class="codex-fab" type="button" aria-label="问 Codex"><span class="fab-ico">&gt;_</span><span class="fab-txt">问 Codex</span></button>
+<aside id="codexChat" class="codex-chat" role="dialog" aria-label="问 Codex 直连窗口"><div class="codex-head"><b>&gt;_ Codex</b><span id="codexStatus" class="codex-status connecting">连接中…</span><button id="codexClose" type="button" aria-label="关闭">×</button></div><div id="codexMessages" class="codex-msgs"></div><div id="codexChips" class="codex-chips"><button type="button">代理循环是怎么转起来的？</button><button type="button">tool_use 是什么？</button><button type="button">YOLO 权限怎么分级？</button><button type="button">上下文被占满会怎样？</button></div><div class="codex-input"><textarea id="codexInput" rows="1" placeholder="向本机 Codex 提问…（只读沙箱）"></textarea><button id="codexSend" type="button">发送</button></div></aside>
+<script src="../assets/js/codex-chat.js"></script>
+</body>
+</html>

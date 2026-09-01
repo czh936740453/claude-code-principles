@@ -66,6 +66,14 @@
     { n: 4, title: "研究与移植篇", sub: "怎么读源码 / 怎么复刻" }
   ];
 
+  /* 拓展篇 / 进阶篇（独立于 10 章进度） */
+  var EXTRA_PAGES = [
+    { id: "ext-ah",   num: "拓",   title: "Agent 与 Harness（拓展篇）", path: "docs/ext-ah.html" },
+    { id: "ext-adv1", num: "进·1", title: "开源 Agent 框架全景", path: "docs/ext-adv1.html" },
+    { id: "ext-adv2", num: "进·2", title: "精读真实代码：三个 Agent 循环", path: "docs/ext-adv2.html" },
+    { id: "ext-adv3", num: "进·3", title: "让 Agent 更聪明：协作、记忆与安全", path: "docs/ext-adv3.html" }
+  ];
+
   var K = {
     theme: "cc_theme", font: "cc_font",
     visited: "cc_visited", completed: "cc_completed", last: "cc_last", pos: "cc_pos_"
@@ -233,10 +241,13 @@
       }
     }
 
-    /* 拓展篇（独立于 10 章进度） */
-    var extActive = getPage() === "ext-ah" ? " active" : "";
-    html += '<a class="ch' + extActive + '" href="' + (isDocsPage() ? "../" : "") + 'docs/ext-ah.html">' +
-      '<span class="num">拓</span><span>Agent 与 Harness（拓展篇）</span></a>';
+    /* 拓展篇 / 进阶篇（独立于 10 章进度） */
+    for (var e = 0; e < EXTRA_PAGES.length; e++) {
+      var ep = EXTRA_PAGES[e];
+      var eActive = getPage() === ep.id ? " active" : "";
+      html += '<a class="ch' + eActive + '" href="' + (isDocsPage() ? "../" : "") + ep.path + '">' +
+        '<span class="num">' + ep.num + '</span><span>' + ep.title + '</span></a>';
+    }
 
     /* 本页小节（滚动高亮用） */
     if (cur || isDocsPage()) {
@@ -303,6 +314,23 @@
     var cur = curChapter();
     if (!box) return;
     if (!cur && isDocsPage()) {
+      /* 拓展篇 / 进阶篇：在这几个页面之间前后翻页 */
+      var p = getPage();
+      var idx = -1;
+      for (var e = 0; e < EXTRA_PAGES.length; e++) if (EXTRA_PAGES[e].id === p) { idx = e; break; }
+      if (idx !== -1) {
+        var epPrev = idx > 0 ? EXTRA_PAGES[idx - 1] : null;
+        var epNext = idx < EXTRA_PAGES.length - 1 ? EXTRA_PAGES[idx + 1] : null;
+        var h = "";
+        h += epPrev
+          ? '<a href="../' + epPrev.path + '"><span class="dir">← 上一篇</span><b>' + epPrev.num + ' · ' + epPrev.title + '</b></a>'
+          : '<a href="../index.html"><span class="dir">← 返回首页</span><b>学习目录</b></a>';
+        h += epNext
+          ? '<a href="../' + epNext.path + '"><span class="dir">下一篇 →</span><b>' + epNext.num + ' · ' + epNext.title + '</b></a>'
+          : '<a href="../toolbox.html"><span class="dir">去动手 →</span><b>代码库 · 进阶篇模块</b></a>';
+        box.innerHTML = h;
+        return;
+      }
       box.innerHTML = '<a href="../index.html"><span class="dir">← 返回首页</span><b>学习目录</b></a>' +
         '<a href="../toolbox.html"><span class="dir">去动手 →</span><b>代码库 · 迷你 Harness</b></a>';
       return;
